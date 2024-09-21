@@ -24,7 +24,7 @@ func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
 		"!GPL-3.0": true,
 	}
 
-	lc := checker.NewLicenseChecker(allowedLicenses, disallowedLicenses)
+	lc := checker.NewLicenseChecker(nil, allowedLicenses, disallowedLicenses)
 	for name, expected := range tests {
 		t.Run(name, func(t *testing.T) {
 			result, err := lc.IsLicenseAllowed(name)

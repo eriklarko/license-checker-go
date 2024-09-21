@@ -9,7 +9,7 @@ func (n *Node) Solve(context map[string]bool) (bool, error) {
 	if n.Operator == LITERAL {
 		v, err := n.value(context)
 		if v == nil {
-			return false, fmt.Errorf("no value found for literal '%s'", n.rawLiteralValue)
+			return false, NewUnknownVariableError(n.rawLiteralValue)
 		}
 		return *v, err
 	}
