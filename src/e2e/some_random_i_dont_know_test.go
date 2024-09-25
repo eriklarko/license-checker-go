@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	licensechecker "github.com/eriklarko/license-checker/src/checker"
-	"github.com/eriklarko/license-checker/src/environment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,12 +22,11 @@ func TestLicenseChecker(t *testing.T) {
 	allowedLicenses := []string{"MIT", "Apache-2.0"}
 	disallowedLicenses := []string{"GPL-3.0", "BSD-3-Clause"}
 
-	// Decide what happens when unknown licenses are found. When running
-	// interactively, that's an error, but when running on CI, it's not.
-	environment.ForceSetIsInteractive(true)
-
 	// Create a new LicenseChecker
-	checker := licensechecker.NewLicenseChecker(nil, allowedLicenses, disallowedLicenses)
+	checker := licensechecker.NewFromLists(allowedLicenses, disallowedLicenses, func(license, dependency string) bool {
+		// unknown licenses are not allowed
+		return false
+	})
 
 	// Read the go-licenses_license.csv file
 	licenses, err := ReadLicenseFile("go-licenses_licenses.csv")
@@ -36,22 +34,64 @@ func TestLicenseChecker(t *testing.T) {
 		t.Fatalf("Failed to read license file: %v", err)
 	}
 
-	// Check if each license is allowed or not
-	for dependency, license := range licenses {
-		allowed, err := checker.IsLicenseAllowed(license)
-		require.NoError(t, err)
+	report, err := checker.ValidateCurrentLicenses(licenses)
+	require.NoError(t, err)
 
-		if allowed {
-			t.Logf("License %s is allowed (%s)", license, dependency)
-		} else {
-			t.Errorf("License %s is not allowed (%s)", license, dependency)
-		}
+	expectedAllowed := map[string][]string{
+		"Apache-2.0": {
+			"github.com/golang/glog",
+			"github.com/google/go-licenses",
+			"go.opencensus.io",
+			"github.com/google/licenseclassifier/stringclassifier",
+			"gopkg.in/src-d/go-billy.v4",
+			"gopkg.in/src-d/go-git.v4",
+			"github.com/golang/groupcache/lru",
+			"github.com/spf13/cobra",
+			"github.com/google/licenseclassifier",
+			"github.com/xanzy/ssh-agent",
+		},
+		"MIT": {
+			"github.com/mitchellh/go-homedir",
+			"github.com/sergi/go-diff/diffmatchpatch",
+			"github.com/jbenet/go-context/io",
+			"github.com/otiai10/copy",
+			"github.com/kevinburke/ssh_config",
+		},
 	}
+	expectedDisallowed := map[string][]string{
+		"BSD-2-Clause": {
+			"github.com/emirpasic/gods",
+			"gopkg.in/warnings.v0",
+		},
+		"BSD-3-Clause": {
+			"golang.org/x/crypto",
+			"golang.org/x/tools",
+			"golang.org/x/xerrors",
+			"github.com/spf13/pflag",
+			"github.com/src-d/gcfg",
+			"golang.org/x/mod/semver",
+			"golang.org/x/net",
+			"github.com/google/go-licenses/internal/third_party/pkgsite",
+			"golang.org/x/sys",
+		},
+	}
+	assertMapsEqual(t, expectedAllowed, report.Allowed)
+	assertMapsEqual(t, expectedDisallowed, report.Disallowed)
+}
 
-	// also ensure that instructions to run the tool interactively are logged
-	assert.Contains(t, logOutput.String(), "./license-checker")
+func assertMapsEqual(t *testing.T, expected, actual map[string][]string) {
+	t.Helper()
 
-	t.Fail()
+	t.Logf("expected: %v", expected)
+	t.Logf("actual: %v", actual)
+
+	assert.Equal(t, len(expected), len(actual), "maps have different lengths")
+
+	for key, expectedValues := range expected {
+		actualValues, ok := actual[key]
+		assert.True(t, ok, "key %q not found in actual map", key)
+		assert.ElementsMatch(t, expectedValues, actualValues)
+	}
 }
 
 func ReadLicenseFile(filename string) (map[string]string, error) {

@@ -4,23 +4,37 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/eriklarko/license-checker/src/boolexpr"
-	"github.com/eriklarko/license-checker/src/config"
-	"github.com/eriklarko/license-checker/src/environment"
 )
 
-type LicenseChecker struct {
-	config  *config.Config // st st st stutter
-	context map[string]bool
+type UnknownLicenseError struct {
+	License string
 }
 
-func NewLicenseChecker(config *config.Config, allowedLicenses, disallowedLicenses []string) *LicenseChecker {
+func (ule *UnknownLicenseError) Error() string {
+	return fmt.Sprintf("unknown license '%s'", ule.License)
+}
+
+type UnknownLicenseHandler func(license, dependency string) bool
+
+type LicenseChecker struct {
+	context               map[string]bool
+	unknownLicenseHandler UnknownLicenseHandler
+}
+
+func NewFromMap(context map[string]bool, onUnknownLicense UnknownLicenseHandler) *LicenseChecker {
 	return &LicenseChecker{
-		config:  config,
-		context: buildContext(allowedLicenses, disallowedLicenses),
+		context:               context,
+		unknownLicenseHandler: onUnknownLicense,
 	}
+}
+
+func NewFromLists(allowedLicenses, disallowedLicenses []string, onUnknownLicense UnknownLicenseHandler) *LicenseChecker {
+	return NewFromMap(
+		buildContext(allowedLicenses, disallowedLicenses),
+		onUnknownLicense,
+	)
 }
 
 func buildContext(approvedLicenses []string, disallowedLicenses []string) map[string]bool {
@@ -37,6 +51,11 @@ func buildContext(approvedLicenses []string, disallowedLicenses []string) map[st
 	return context
 }
 
+// Update updates the license decision for a dependency
+func (lc *LicenseChecker) Update(license string, isAllowed bool) {
+	lc.context[license] = isAllowed
+}
+
 func (lc *LicenseChecker) IsLicenseAllowed(license string) (bool, error) {
 	node, err := boolexpr.New(license)
 	if err != nil {
@@ -46,29 +65,7 @@ func (lc *LicenseChecker) IsLicenseAllowed(license string) (bool, error) {
 	var errUnknownVar *boolexpr.UnknownVariableError
 	solution, err := node.Solve(lc.context)
 	if errors.As(err, &errUnknownVar) {
-		// When running interactively this is an error, when running
-		// on CI it's not, it's just defaulting to not allowing things it
-		// doesn't know about. Good sense.
-		if environment.IsInteractive() {
-			for {
-				if askForever("Unknown license detected. Should it be allowed? [y/N]: ") {
-					// user allowed license
-					lc.context[license] = true
-				} else {
-					// user disallowed license
-					lc.context[license] = false
-				}
-
-				lc.config.WriteLicenseMapToCSV(lc.context)
-			}
-		} else {
-			// TODO: verify hint
-			slog.Warn("Unknown license detected. To decide if the license is allowed or not, please run this tool again interactively.",
-				"license", license,
-				"hint", "For example, run `./license-checker .` from the project root.",
-			)
-			return false, nil
-		}
+		return false, &UnknownLicenseError{License: license}
 	} else if err != nil {
 		return solution, fmt.Errorf("failed to solve license '%s': %w", license, err)
 	}
@@ -76,23 +73,31 @@ func (lc *LicenseChecker) IsLicenseAllowed(license string) (bool, error) {
 	return solution, nil
 }
 
-// TODO: Move to some cui package
-func askForever(question string) bool {
-	var response string
-	for {
-		fmt.Print(question)
-		_, err := fmt.Scanln(&response)
+// TODO: test tesst test
+func (lc *LicenseChecker) ValidateCurrentLicenses(currentLicenses map[string]string) (*Report, error) {
+	report := &Report{}
+	for dependency, license := range currentLicenses {
+		slog.Debug("Checking license", "license", license, "dependency", dependency)
 
-		if err != nil {
-			slog.Error("failed to read user input", "error", err)
-			panic("failed to read user input: " + err.Error())
+		var errUnknownLicense *UnknownLicenseError
+		allowed, err := lc.IsLicenseAllowed(license)
+
+		if errors.As(err, &errUnknownLicense) {
+			unknownIsAllowed := lc.unknownLicenseHandler(
+				license,
+				dependency,
+			)
+
+			// store the decision so we don't have to ask again
+			lc.Update(license, unknownIsAllowed)
+
+			allowed = unknownIsAllowed
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to check if license is allowed or not: %w", err)
 		}
 
-		switch strings.ToLower(response) {
-		case "y", "yes":
-			return true
-		case "n", "no", "":
-			return false
-		}
+		report.RecordDecision(license, dependency, allowed)
 	}
+
+	return report, nil
 }

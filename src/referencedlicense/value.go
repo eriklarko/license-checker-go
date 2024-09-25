@@ -24,23 +24,19 @@ func NewReferenceValueVerifier(outputFile string) *ReferenceValueVerifier {
 }
 
 func (r *ReferenceValueVerifier) Record(dependency, license string) error {
-	md5Sum, err := calculateMD5Sum(license)
+	md5Sum := calculateMD5Sum(license)
+	err := r.appendToLicenseFile(dependency, md5Sum)
 	if err != nil {
-		return err
-	}
-
-	err = r.appendToLicenseFile(dependency, md5Sum)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to append to license file for dependency %s: %w", dependency, err)
 	}
 
 	return nil
 }
 
-func calculateMD5Sum(license string) (string, error) {
+func calculateMD5Sum(license string) string {
 	hash := md5.Sum([]byte(license))
 	md5Sum := fmt.Sprintf("%x", hash)
-	return md5Sum, nil
+	return md5Sum
 }
 
 func (r *ReferenceValueVerifier) appendToLicenseFile(dependency, md5Sum string) error {
@@ -48,14 +44,14 @@ func (r *ReferenceValueVerifier) appendToLicenseFile(dependency, md5Sum string) 
 		var err error
 		r.writer, err = r.openWriter()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to open writer: %w", err)
 		}
 	}
 
 	record := []string{dependency, md5Sum}
 	err := r.writer.Write(record)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write record to CSV: %w", err)
 	}
 
 	return nil
@@ -64,12 +60,12 @@ func (r *ReferenceValueVerifier) appendToLicenseFile(dependency, md5Sum string) 
 func (r *ReferenceValueVerifier) openWriter() (*csv.Writer, error) {
 	absPath, err := filepath.Abs(r.outputFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get absolute path of output file: %w", err)
 	}
 
 	file, err := os.OpenFile(absPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open output file: %w", err)
 	}
 	r.outputFileHandle = file
 
@@ -86,22 +82,20 @@ func (r *ReferenceValueVerifier) Close() error {
 	if r.outputFileHandle != nil {
 		err := r.outputFileHandle.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to close output file handle: %w", err)
 		}
 	}
 
 	return nil
 }
+
 func (r *ReferenceValueVerifier) CheckLicenseMatch(license string) (bool, error) {
-	md5Sum, err := calculateMD5Sum(license)
-	if err != nil {
-		return false, err
-	}
+	md5Sum := calculateMD5Sum(license)
 
 	if r.knownLicenses == nil {
 		err := r.loadKnownLicenses()
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("failed to load known licenses: %w", err)
 		}
 	}
 
@@ -117,19 +111,19 @@ func (r *ReferenceValueVerifier) CheckLicenseMatch(license string) (bool, error)
 func (r *ReferenceValueVerifier) loadKnownLicenses() error {
 	absPath, err := filepath.Abs(r.outputFile)
 	if err != nil {
-		return err
+		absPath = r.outputFile
 	}
 
 	file, err := os.Open(absPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open output file: %w", err)
 	}
 	defer file.Close()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read records from CSV: %w", err)
 	}
 
 	r.knownLicenses = make(map[string]string)

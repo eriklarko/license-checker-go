@@ -6,30 +6,95 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	filePath string
+	LicensesScript string `yaml:"licenses-script"`
+	LicensesFile   string `yaml:"licenses-file"`
 }
 
-func NewConfig(filePath string) *Config {
-	return &Config{
-		filePath: filePath,
+func LoadConfig(path string) (*Config, error) {
+	path = tryMakeAbsolute(path)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, err
 	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
+	}
+
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("config file %s is not valid yaml: %s", path, err)
+	}
+
+	config.LicensesScript = tryMakeAbsolute(config.LicensesScript)
+	config.LicensesFile = tryMakeAbsolute(config.LicensesFile)
+
+	return &config, nil
 }
 
-// WriteLicenseMapToCSV writes a map from license to a boolean indicating whether it is allowed or not to a CSV file.
-func (c *Config) WriteLicenseMapToCSV(licenseMap map[string]bool) error {
-	absPath, err := filepath.Abs(c.filePath)
+// tryMakeAbsolute converts a relative file path to an absolute file path.
+// If the conversion fails, it returns the original relative path.
+func tryMakeAbsolute(relativePath string) string {
+	absPath, err := filepath.Abs(relativePath)
 	if err != nil {
-		// this isn't an error enough to stop execution. It's just to make it
-		// easier for the user to find the file. Best effort.
-		absPath = c.filePath
+		return relativePath
 	}
 
-	file, err := os.Create(absPath)
+	return absPath
+}
+
+// Validate checks if the config is valid, i.e. all required fields are set.
+// Returns nil if the config is valid, otherwise an error message.
+func (c *Config) Validate() error {
+	var errs []string
+
+	if c.LicensesScript == "" {
+		errs = append(errs, "licenses-script cannot be empty")
+	}
+	if c.LicensesFile == "" {
+		errs = append(errs, "licenses-file cannot be empty")
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("validation errors: %s", errs)
+	}
+
+	return nil
+}
+
+// Write writes the config to a file.
+func (c *Config) Write(path string) error {
+	path = tryMakeAbsolute(path)
+
+	// Open file for writing, creating it if it doesn't exist. Using 0644 which
+	// grants the owner read and write access, while the group members and other
+	// system users only have read acces
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", absPath, err)
+		return fmt.Errorf("error opening/creating file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	enc := yaml.NewEncoder(file)
+	err = enc.Encode(c)
+	if err != nil {
+		return fmt.Errorf("failed encoding config as yaml: %w", err)
+	}
+
+	return nil
+}
+
+// WriteLicenseMap writes a map from license to a boolean indicating whether it
+// is allowed or not to a specified file.
+func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
+	path := tryMakeAbsolute(c.LicensesFile)
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", path, err)
 	}
 	defer file.Close()
 
@@ -46,23 +111,20 @@ func (c *Config) WriteLicenseMapToCSV(licenseMap map[string]bool) error {
 	return nil
 }
 
-// ReadLicenseMapFromCSV reads a map from license to a boolean indicating whether it is allowed or not from a CSV file.
-func (c *Config) ReadLicenseMapFromCSV() (map[string]bool, error) {
-	absPath, err := filepath.Abs(c.filePath)
+// ReadLicenseMap reads a map from license to a boolean indicating whether it is
+// allowed or not from a specified file.
+func (c *Config) ReadLicenseMap() (map[string]bool, error) {
+	path := tryMakeAbsolute(c.LicensesFile)
+	file, err := os.Open(path)
 	if err != nil {
-		absPath = c.filePath
-	}
-
-	file, err := os.Open(absPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", absPath, err)
+		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read records from file %s: %w", absPath, err)
+		return nil, fmt.Errorf("failed to read records from file %s: %w", path, err)
 	}
 
 	licenseMap := make(map[string]bool)
@@ -81,4 +143,14 @@ func (c *Config) ReadLicenseMapFromCSV() (map[string]bool, error) {
 	}
 
 	return licenseMap, nil
+}
+
+// String returns the YAML representation of the Config struct.
+func (c *Config) String() string {
+	// TODO: converting to yaml is such a bad idea
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("failed to marshal config: %v", err)
+	}
+	return string(data)
 }
