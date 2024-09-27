@@ -7,6 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func CreateTempDir(t *testing.T, fileName string) string {
+	t.Helper()
+
+	tmpDir, err := os.MkdirTemp(t.TempDir(), fileName)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.Remove(tmpDir)
+	})
+
+	return tmpDir
+}
+
 // CreateTempFile creates a temporary file in the test's temporary directory,
 // and automatically removes it when the test is done.
 func CreateTempFile(t *testing.T, fileName string) *os.File {

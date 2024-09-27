@@ -11,8 +11,13 @@ import (
 )
 
 type Config struct {
+	// required values
 	LicensesScript string `yaml:"licenses-script"`
 	LicensesFile   string `yaml:"licenses-file"`
+	CacheDir       string `yaml:"cache-dir"`
+
+	// optional values
+	CuratedlistsSource string `yaml:"curated-list-source"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -30,10 +35,26 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config file %s is not valid yaml: %s", path, err)
 	}
 
+	// TODO: test
+	applyDefaults(&config)
+
 	config.LicensesScript = tryMakeAbsolute(config.LicensesScript)
 	config.LicensesFile = tryMakeAbsolute(config.LicensesFile)
+	config.CacheDir = tryMakeAbsolute(config.CacheDir)
 
 	return &config, nil
+}
+
+func applyDefaults(c *Config) {
+	if c.CacheDir == "" {
+		c.CacheDir = ".license-checker"
+	}
+	if c.LicensesScript == "" {
+		c.LicensesScript = filepath.Join(c.CacheDir, "print-current-licenses.sh")
+	}
+	if c.LicensesFile == "" {
+		c.LicensesFile = filepath.Join(c.CacheDir, "licenses.csv")
+	}
 }
 
 // tryMakeAbsolute converts a relative file path to an absolute file path.
@@ -52,6 +73,9 @@ func tryMakeAbsolute(relativePath string) string {
 func (c *Config) Validate() error {
 	var errs []string
 
+	if c.CacheDir == "" {
+		errs = append(errs, "cache-dir cannot be empty")
+	}
 	if c.LicensesScript == "" {
 		errs = append(errs, "licenses-script cannot be empty")
 	}
@@ -91,7 +115,7 @@ func (c *Config) Write(path string) error {
 // WriteLicenseMap writes a map from license to a boolean indicating whether it
 // is allowed or not to a specified file.
 func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
-	path := tryMakeAbsolute(c.LicensesFile)
+	path := c.LicensesFile
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
@@ -114,7 +138,7 @@ func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
 // ReadLicenseMap reads a map from license to a boolean indicating whether it is
 // allowed or not from a specified file.
 func (c *Config) ReadLicenseMap() (map[string]bool, error) {
-	path := tryMakeAbsolute(c.LicensesFile)
+	path := c.LicensesFile
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
