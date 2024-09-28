@@ -45,12 +45,14 @@ func TestDownloadLists(t *testing.T) {
 	// and publish both curated lists
 	curatedListsContent := map[string]any{
 		"list1": map[string]any{
-			"md5": "5ab167ddafd86bec81a83e040554116c",
-			"url": list1Url,
+			"md5":         "73411061536ff8a32777eec043ece0e6",
+			"url":         list1Url,
+			"description": "A silly list that is incredibly conservative",
 		},
 		"list2": map[string]any{
-			"md5": "00728231770e994ed79802c9698e8a8c",
-			"url": list2Url,
+			"md5":         "fad50251071a2532729e7f4beb79f8ca",
+			"url":         list2Url,
+			"description": "A more permissive list",
 		},
 	}
 	httpMock.AddYamlResponse(conf.CuratedlistsSource, curatedListsContent)
@@ -87,5 +89,5 @@ func assertFileExists(t *testing.T, path string, content map[string]any) {
 	contentBytes, err := yaml.Marshal(content)
 	require.NoError(t, err)
 
-	assert.Equal(t, string(contentBytes), string(fileContent))
+	assert.YAMLEq(t, string(contentBytes), string(fileContent))
 }
