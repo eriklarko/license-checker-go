@@ -117,6 +117,10 @@ func (c *Config) Write() error {
 	}
 	defer file.Close()
 
+	// Make sure the file is only writeable by the owner if the config file
+	// already existed before this write
+	os.Chmod(c.Path, 0644)
+
 	enc := yaml.NewEncoder(file)
 	err = enc.Encode(c)
 	if err != nil {

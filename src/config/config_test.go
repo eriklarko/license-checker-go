@@ -63,7 +63,7 @@ func TestWriteConfig(t *testing.T) {
 	// verify permissions
 	fileInfo, err := os.Stat(configFile)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0644), fileInfo.Mode())
+	assert.Equal(t, os.FileMode(0644).String(), fileInfo.Mode().String())
 }
 
 func TestWriteLicenseMap(t *testing.T) {
