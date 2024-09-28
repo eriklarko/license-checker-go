@@ -22,7 +22,7 @@ func TestDownloadLists(t *testing.T) {
 	httpMock := helpers_test.NewMockServer()
 	defer httpMock.Close()
 
-	conf := config.Config{
+	conf := &config.Config{
 		CacheDir:           helpers_test.CreateTempDir(t, "license-checker-test-cache-*"),
 		CuratedlistsSource: httpMock.URL() + "/curated-lists.yaml",
 	}
@@ -30,15 +30,15 @@ func TestDownloadLists(t *testing.T) {
 	// define two curated lists
 	list1Url := httpMock.URL() + "/list1.yaml"
 	list1 := map[string]any{
-		"allowed-licenses":     []string{"MIT"},
-		"dissallowed-licenses": []string{"GPL-3.0"},
+		"allowed-licenses":    []string{"MIT"},
+		"disallowed-licenses": []string{"GPL-3.0"},
 	}
 	httpMock.AddYamlResponse(list1Url, list1)
 
 	list2Url := httpMock.URL() + "/list2.yaml"
 	list2 := map[string]any{
-		"allowed-licenses":     []string{"MIT", "Apache-2.0", "GPL-3.0"},
-		"dissallowed-licenses": []string{},
+		"allowed-licenses":    []string{"MIT", "Apache-2.0", "GPL-3.0"},
+		"disallowed-licenses": []string{},
 	}
 	httpMock.AddYamlResponse(list2Url, list2)
 

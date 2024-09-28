@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,8 +30,11 @@ import (
 //	  url: https://example.com/less-conservative-list.yaml
 type ListResponse map[string]ListInfo
 type ListInfo struct {
-	Md5 string `yaml:"md5"`
-	Url string `yaml:"url"`
+	Md5         string `yaml:"md5"`
+	Url         string `yaml:"url"`
+	Description string `yaml:"description"`
+
+	Rating float32 `yaml:"rating,omitempty"`
 }
 
 type Service struct {
@@ -139,6 +143,12 @@ func truncate[T any](s []T, maxLength int) []T {
 }
 
 func (s *Service) writeListLockFile(lists ListResponse) error {
+
+	// Ensure the cache directory exists
+	if err := os.MkdirAll(s.config.CacheDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create cache directory %s: %w", s.config.CacheDir, err)
+	}
+
 	path := filepath.Join(s.config.CacheDir, "list-lock.yaml")
 	file, err := os.Create(path)
 	if err != nil {
@@ -174,6 +184,7 @@ func (s *Service) downloadLists() error {
 			if err != nil {
 				errCh <- fmt.Errorf("failed to download list %s: %w", listName, err)
 			}
+
 		}(listName, listInfo)
 	}
 	wg.Wait()
@@ -191,6 +202,8 @@ func (s *Service) downloadLists() error {
 }
 
 func (s *Service) readListLockFile() (ListResponse, error) {
+	// TODO: consider caching this in memory
+
 	path := filepath.Join(s.config.CacheDir, "list-lock.yaml")
 	file, err := os.Open(path)
 	if err != nil {
@@ -309,4 +322,39 @@ func (s *Service) ValidateLocalLists() error {
 		}
 		return fmt.Errorf("multiple errors occurred: %s", strings.Join(errMsgs, "; "))
 	}
+}
+
+func (s *Service) GetAllLists() (ListResponse, error) {
+	lists, err := s.readListLockFile()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read list lock file: %w", err)
+	}
+
+	return lists, nil
+}
+
+func (s *Service) GetHigestRatedList() (string, string, error) {
+	lists, err := s.readListLockFile()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read list lock file: %w", err)
+	}
+
+	// find highest rated list
+	var bestListName string
+	var bestListInfo ListInfo
+	var bestRating float32 = math.SmallestNonzeroFloat32
+	for listName, listInfo := range lists {
+		if listInfo.Rating > bestRating {
+			bestListName = listName
+			bestListInfo = listInfo
+
+			bestRating = listInfo.Rating
+		}
+	}
+
+	return bestListName, bestListInfo.Description, nil
+}
+
+func (s *Service) SelectList(listName string) error {
+	return s.config.PersistCuratedListChoice(listName)
 }

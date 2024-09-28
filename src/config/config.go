@@ -17,7 +17,18 @@ type Config struct {
 	CacheDir       string `yaml:"cache-dir"`
 
 	// optional values
-	CuratedlistsSource string `yaml:"curated-list-source"`
+	CuratedlistsSource  string `yaml:"curated-list-source"`
+	SelectedCuratedList string `yaml:"selected-curated-list,omitempty"`
+
+	// the file this config was read from
+	Path string `yaml:"-"` // not serialized
+}
+
+func DefaultConfig() *Config {
+	conf := &Config{}
+	conf.applyDefaults()
+	conf.makePathsAbsolute()
+	return conf
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -35,17 +46,17 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config file %s is not valid yaml: %s", path, err)
 	}
 
-	// TODO: test
-	applyDefaults(&config)
+	(&config).applyDefaults()
 
-	config.LicensesScript = tryMakeAbsolute(config.LicensesScript)
-	config.LicensesFile = tryMakeAbsolute(config.LicensesFile)
-	config.CacheDir = tryMakeAbsolute(config.CacheDir)
+	(&config).makePathsAbsolute()
+
+	config.Path = path
 
 	return &config, nil
 }
 
-func applyDefaults(c *Config) {
+// TODO: test
+func (c *Config) applyDefaults() {
 	if c.CacheDir == "" {
 		c.CacheDir = ".license-checker"
 	}
@@ -55,6 +66,20 @@ func applyDefaults(c *Config) {
 	if c.LicensesFile == "" {
 		c.LicensesFile = filepath.Join(c.CacheDir, "licenses.csv")
 	}
+
+	if c.CuratedlistsSource == "" {
+		c.CuratedlistsSource = "https://raw.githubusercontent.com/eriklarko/license-checker-go/refs/heads/main/lists/list-metadata.yaml"
+	}
+
+	if c.Path == "" {
+		c.Path = ".license-checker.yaml"
+	}
+}
+
+func (c *Config) makePathsAbsolute() {
+	c.LicensesScript = tryMakeAbsolute(c.LicensesScript)
+	c.LicensesFile = tryMakeAbsolute(c.LicensesFile)
+	c.CacheDir = tryMakeAbsolute(c.CacheDir)
 }
 
 // tryMakeAbsolute converts a relative file path to an absolute file path.
@@ -91,15 +116,13 @@ func (c *Config) Validate() error {
 }
 
 // Write writes the config to a file.
-func (c *Config) Write(path string) error {
-	path = tryMakeAbsolute(path)
-
+func (c *Config) Write() error {
 	// Open file for writing, creating it if it doesn't exist. Using 0644 which
 	// grants the owner read and write access, while the group members and other
 	// system users only have read acces
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	file, err := os.OpenFile(c.Path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return fmt.Errorf("error opening/creating file %s: %w", path, err)
+		return fmt.Errorf("error opening/creating file %s: %w", c.Path, err)
 	}
 	defer file.Close()
 
@@ -140,6 +163,9 @@ func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
 func (c *Config) ReadLicenseMap() (map[string]bool, error) {
 	path := c.LicensesFile
 	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
@@ -167,6 +193,11 @@ func (c *Config) ReadLicenseMap() (map[string]bool, error) {
 	}
 
 	return licenseMap, nil
+}
+
+func (c *Config) PersistCuratedListChoice(listName string) error {
+	c.SelectedCuratedList = listName
+	return c.Write()
 }
 
 // String returns the YAML representation of the Config struct.

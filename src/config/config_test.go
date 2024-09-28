@@ -46,9 +46,11 @@ func TestWriteConfig(t *testing.T) {
 	config := &Config{
 		LicensesFile:   "test_licenses.csv",
 		LicensesScript: "test_script.sh",
+
+		Path: configFile,
 	}
 
-	err := config.Write(configFile)
+	err := config.Write()
 	require.NoError(t, err)
 
 	// Verify file content
