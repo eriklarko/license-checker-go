@@ -34,7 +34,7 @@ type ListInfo struct {
 }
 
 type Service struct {
-	config       config.Config
+	config       *config.Config
 	roundTripper http.RoundTripper
 }
 
@@ -44,7 +44,7 @@ type Service struct {
 //	import "net/http"
 //	var s = curatedlists.New(config, http.DefaultTransport)
 func New(
-	config config.Config,
+	config *config.Config,
 	roundTripperd http.RoundTripper,
 ) *Service {
 	return &Service{

@@ -1,0 +1,6 @@
+allowed-licenses:
+  - MIT
+
+disallowed-liceses:
+  - GPL-3.0
+

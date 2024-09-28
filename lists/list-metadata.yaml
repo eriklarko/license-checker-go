@@ -1,0 +1,6 @@
+list1:
+  url: https://raw.githubusercontent.com/eriklarko/license-checker/refs/heads/main/lists/list1.yaml
+  md5: 123
+list2:
+  url: https://raw.githubusercontent.com/eriklarko/license-checker/refs/heads/main/lists/list2.yaml
+  md5: 456
