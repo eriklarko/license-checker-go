@@ -27,7 +27,6 @@ type Config struct {
 func DefaultConfig() *Config {
 	conf := &Config{}
 	conf.applyDefaults()
-	conf.makePathsAbsolute()
 	return conf
 }
 
@@ -48,9 +47,7 @@ func LoadConfig(path string) (*Config, error) {
 
 	(&config).applyDefaults()
 
-	(&config).makePathsAbsolute()
-
-	config.Path = path
+	config.Path = tryMakeAbsolute(path)
 
 	return &config, nil
 }
@@ -74,12 +71,6 @@ func (c *Config) applyDefaults() {
 	if c.Path == "" {
 		c.Path = ".license-checker.yaml"
 	}
-}
-
-func (c *Config) makePathsAbsolute() {
-	c.LicensesScript = tryMakeAbsolute(c.LicensesScript)
-	c.LicensesFile = tryMakeAbsolute(c.LicensesFile)
-	c.CacheDir = tryMakeAbsolute(c.CacheDir)
 }
 
 // tryMakeAbsolute converts a relative file path to an absolute file path.
@@ -138,7 +129,7 @@ func (c *Config) Write() error {
 // WriteLicenseMap writes a map from license to a boolean indicating whether it
 // is allowed or not to a specified file.
 func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
-	path := c.LicensesFile
+	path := tryMakeAbsolute(c.LicensesFile)
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
@@ -161,7 +152,7 @@ func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
 // ReadLicenseMap reads a map from license to a boolean indicating whether it is
 // allowed or not from a specified file.
 func (c *Config) ReadLicenseMap() (map[string]bool, error) {
-	path := c.LicensesFile
+	path := tryMakeAbsolute(c.LicensesFile)
 	file, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil, err
