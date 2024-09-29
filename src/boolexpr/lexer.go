@@ -14,6 +14,7 @@ func buildTree(expression string) (*Node, error) {
 	return buildBinary(parts)
 }
 
+// See the tests for examples of how this function works
 func splitString(expression string) []string {
 	var parts []string
 	var currentPart string
@@ -62,17 +63,41 @@ func removeWrappingParentheses(expression string) string {
 
 func buildUnary(expression string) (*Node, error) {
 	if strings.HasPrefix(expression, "!") {
-		return parseNegation(expression[1:])
+		expressionWithoutExclamation := expression[1:]
+		return parseNegation(expressionWithoutExclamation)
 	}
 	return parseLiteral(expression)
 }
 
+// parts is expected to have 3 elements: left, operator, right
 func buildBinary(parts []string) (*Node, error) {
-	switch parts[1] {
+	leftExpression := parts[0]
+	operator := parts[1]
+	rightExpression := parts[2]
+
+	left, err := buildTree(leftExpression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build left subtree: %w", err)
+	}
+
+	right, err := buildTree(rightExpression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build right subtree: %w", err)
+	}
+
+	switch operator {
 	case "&&":
-		return parseConjunction(parts[0], parts[2])
+		return &Node{
+			Operator: AND,
+			Left:     left,
+			Right:    right,
+		}, nil
 	case "||":
-		return parseDisjunction(parts[0], parts[2])
+		return &Node{
+			Operator: OR,
+			Left:     left,
+			Right:    right,
+		}, nil
 	default:
 		return nil, fmt.Errorf("invalid operator '%s'", parts[1])
 	}
@@ -80,16 +105,9 @@ func buildBinary(parts []string) (*Node, error) {
 
 func parseLiteral(expression string) (*Node, error) {
 	// Base case: if the expression is a single boolean value
-	/*value, err := strconv.ParseBool(expression)
-	if err != nil {
-		// Wrap the error and return it
-		return nil, fmt.Errorf("failed to parse boolean value '%s': %w", expression, err)
-	}*/
-	// TODO: Remove value??
 	return &Node{
 		Operator:        LITERAL,
 		rawLiteralValue: expression,
-		//Value:    &value,
 	}, nil
 }
 
@@ -98,40 +116,9 @@ func parseNegation(expression string) (*Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build left subtree: %w", err)
 	}
+
 	return &Node{
 		Operator: NOT,
 		Left:     left,
-	}, nil
-}
-
-func parseConjunction(leftExpression, rightExpression string) (*Node, error) {
-	left, err := buildTree(leftExpression)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build left subtree: %w", err)
-	}
-	right, err := buildTree(rightExpression)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build right subtree: %w", err)
-	}
-	return &Node{
-		Operator: AND,
-		Left:     left,
-		Right:    right,
-	}, nil
-}
-
-func parseDisjunction(leftExpression, rightExpression string) (*Node, error) {
-	left, err := buildTree(leftExpression)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build left subtree: %w", err)
-	}
-	right, err := buildTree(rightExpression)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build right subtree: %w", err)
-	}
-	return &Node{
-		Operator: OR,
-		Left:     left,
-		Right:    right,
 	}, nil
 }

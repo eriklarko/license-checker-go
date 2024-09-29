@@ -8,10 +8,14 @@ import (
 func (n *Node) Solve(context map[string]bool) (bool, error) {
 	if n.Operator == LITERAL {
 		v, err := n.value(context)
+		if err != nil {
+			return false, err
+		}
 		if v == nil {
 			return false, NewUnknownVariableError(n.rawLiteralValue)
 		}
-		return *v, err
+
+		return *v, nil
 	}
 
 	if n.Operator == NOT {
@@ -42,19 +46,20 @@ func (n *Node) Solve(context map[string]bool) (bool, error) {
 }
 
 func (n *Node) value(context map[string]bool) (*bool, error) {
-	if n.rawLiteralValue == "" {
-		return nil, nil
+	// is the literal value a boolean?
+	value, err := strconv.ParseBool(n.rawLiteralValue)
+	if err == nil {
+		return &value, nil
+		// if the error is not nil, it's likely that we're trying to get the
+		// value of a variable, so we'll continue to the next check and ignore
+		// the error
 	}
 
-	// is the literal value a variable?
+	// is the literal value a known variable?
 	if val, ok := context[n.rawLiteralValue]; ok {
 		return &val, nil
 	}
 
-	// is the literal value a boolean?
-	value, err := strconv.ParseBool(n.rawLiteralValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse boolean value '%s': %w", n.rawLiteralValue, err)
-	}
-	return &value, nil
+	// the variable is unknown, which is not an error
+	return nil, nil
 }

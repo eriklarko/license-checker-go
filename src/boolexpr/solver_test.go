@@ -88,3 +88,14 @@ func runSolverTests(t *testing.T, tests map[string]bool, context map[string]bool
 		})
 	}
 }
+
+func TestUnknownVariable(t *testing.T) {
+	// create an expression referencing variable A
+	node, err := boolexpr.New("A")
+	require.NoError(t, err)
+
+	// and try to solve it without providing a value for A
+	_, err = node.Solve(make(map[string]bool))
+	assert.Contains(t, err.Error(), "unknown variable")
+	assert.Contains(t, err.Error(), "A")
+}
