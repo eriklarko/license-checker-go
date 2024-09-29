@@ -3,6 +3,8 @@ package checker
 type Report struct {
 	Allowed    map[string][]string
 	Disallowed map[string][]string
+
+	Unknown map[string][]string
 }
 
 func (r *Report) RecordDecision(license string, dependency string, allowed bool) {
@@ -27,4 +29,11 @@ func (r *Report) RecordDisallowed(license string, dependency string) {
 		r.Disallowed = make(map[string][]string)
 	}
 	r.Disallowed[license] = append(r.Disallowed[license], dependency)
+}
+
+func (r *Report) RecordUnknownLicense(license string, dependency string) {
+	if r.Unknown == nil {
+		r.Unknown = make(map[string][]string)
+	}
+	r.Unknown[license] = append(r.Unknown[license], dependency)
 }

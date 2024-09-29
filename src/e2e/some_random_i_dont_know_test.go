@@ -23,10 +23,7 @@ func TestLicenseChecker(t *testing.T) {
 	disallowedLicenses := []string{"GPL-3.0", "BSD-3-Clause"}
 
 	// Create a new LicenseChecker
-	checker := licensechecker.NewFromLists(allowedLicenses, disallowedLicenses, func(license, dependency string) bool {
-		// unknown licenses are not allowed
-		return false
-	})
+	checker := licensechecker.NewFromLists(allowedLicenses, disallowedLicenses)
 
 	// Read the go-licenses_license.csv file
 	licenses, err := ReadLicenseFile("go-licenses_licenses.csv")

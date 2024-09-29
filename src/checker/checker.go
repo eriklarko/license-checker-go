@@ -16,24 +16,24 @@ func (ule *UnknownLicenseError) Error() string {
 	return fmt.Sprintf("unknown license '%s'", ule.License)
 }
 
-type UnknownLicenseHandler func(license, dependency string) bool
-
+// LicenseChecker is the engine in this tool. It is responsible for checking if
+// a list of licenses are allowed or not.
+//
+// To specify what happens when unknown licenses are encountered, you can
+// provide a callback using the `onUnknownLicense` constructor parameter
 type LicenseChecker struct {
-	context               map[string]bool
-	unknownLicenseHandler UnknownLicenseHandler
+	context map[string]bool
 }
 
-func NewFromMap(context map[string]bool, onUnknownLicense UnknownLicenseHandler) *LicenseChecker {
+func NewFromMap(context map[string]bool) *LicenseChecker {
 	return &LicenseChecker{
-		context:               context,
-		unknownLicenseHandler: onUnknownLicense,
+		context: context,
 	}
 }
 
-func NewFromLists(allowedLicenses, disallowedLicenses []string, onUnknownLicense UnknownLicenseHandler) *LicenseChecker {
+func NewFromLists(allowedLicenses, disallowedLicenses []string) *LicenseChecker {
 	return NewFromMap(
 		buildContext(allowedLicenses, disallowedLicenses),
-		onUnknownLicense,
 	)
 }
 
@@ -83,20 +83,12 @@ func (lc *LicenseChecker) ValidateCurrentLicenses(currentLicenses map[string]str
 		allowed, err := lc.IsLicenseAllowed(license)
 
 		if errors.As(err, &errUnknownLicense) {
-			unknownIsAllowed := lc.unknownLicenseHandler(
-				license,
-				dependency,
-			)
-
-			// store the decision so we don't have to ask again
-			lc.Update(license, unknownIsAllowed)
-
-			allowed = unknownIsAllowed
+			report.RecordUnknownLicense(license, dependency)
 		} else if err != nil {
 			return nil, fmt.Errorf("failed to check if license is allowed or not: %w", err)
+		} else {
+			report.RecordDecision(license, dependency, allowed)
 		}
-
-		report.RecordDecision(license, dependency, allowed)
 	}
 
 	return report, nil

@@ -19,11 +19,9 @@ func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
 
 			"MIT && Apache-2.0": true,
 			"MIT || GPL-3.0":    true,
-
-			"!GPL-3.0": true,
 		}
 
-		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses, nil)
+		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
 		for name, expected := range tests {
 			t.Run(name, func(t *testing.T) {
 				result, err := lc.IsLicenseAllowed(name)
@@ -37,7 +35,7 @@ func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
 	t.Run("only unknown licenses", func(t *testing.T) {
 		allowedLicenses := []string{}
 		disallowedLicenses := []string{}
-		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses, nil)
+		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
 
 		var errUnknownLicense *checker.UnknownLicenseError
 		_, err := lc.IsLicenseAllowed("unknown")
@@ -52,7 +50,6 @@ func TestLicenseChecker_Update(t *testing.T) {
 			// disallowed to start with
 			license: false,
 		},
-		nil,
 	)
 
 	isAllowed, err := lc.IsLicenseAllowed(license)
@@ -71,13 +68,7 @@ func TestLicenseChecker_ValidateCurrentLicenses(t *testing.T) {
 	allowedLicenses := []string{"MIT", "Apache-2.0"}
 	disallowedLicenses := []string{"GPL-3.0"}
 
-	numUnknown := 0
-	lc := checker.NewFromLists(allowedLicenses, disallowedLicenses, func(license, dependency string) bool {
-		numUnknown++
-
-		// unknown licenses are not allowed
-		return false
-	})
+	lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
 
 	currentLicenses := map[string]string{
 		"some-dependency-1": "MIT",
@@ -94,13 +85,14 @@ func TestLicenseChecker_ValidateCurrentLicenses(t *testing.T) {
 		"Apache-2.0": {"some-dependency-3"},
 	}
 	expectedDisallowed := map[string][]string{
-		"GPL-2.0": {"some-dependency-4"},
 		"GPL-3.0": {"some-dependency-5"},
+	}
+	expectedUnknown := map[string][]string{
+		"GPL-2.0": {"some-dependency-4"},
 	}
 	assertMapsEqual(t, expectedAllowed, report.Allowed)
 	assertMapsEqual(t, expectedDisallowed, report.Disallowed)
-
-	assert.Equal(t, 1, numUnknown, "should have asked for decision on unknown license once")
+	assertMapsEqual(t, expectedUnknown, report.Unknown)
 }
 
 func assertMapsEqual(t *testing.T, expected, actual map[string][]string) {

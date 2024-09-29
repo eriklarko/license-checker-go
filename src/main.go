@@ -41,9 +41,7 @@ func main() {
 
 	tui := tui.New()
 
-	licenseChecker, err := setUpLicenseChecker(config, func(license, dependency string) bool {
-		return handleUnknownLicense(dependency, license, tui)
-	})
+	licenseChecker, err := setUpLicenseChecker(config)
 	if err != nil {
 		panic(err)
 	}
@@ -107,7 +105,7 @@ func overwriteConfigWithCmdLineFlags(conf *config.Config) {
 	}
 }
 
-func setUpLicenseChecker(conf *config.Config, onUnknownLicense func(license, dependency string) bool) (*checker.LicenseChecker, error) {
+func setUpLicenseChecker(conf *config.Config) (*checker.LicenseChecker, error) {
 	licenseMap, err := conf.ReadLicenseMap()
 	if os.IsNotExist(err) {
 		// it's okay for the license map file to not exist. this could be the first run
@@ -120,7 +118,7 @@ func setUpLicenseChecker(conf *config.Config, onUnknownLicense func(license, dep
 		fmt.Printf("Read existing decisions from %s\n", conf.LicensesFile)
 	}
 
-	return checker.NewFromMap(licenseMap, onUnknownLicense), nil
+	return checker.NewFromMap(licenseMap), nil
 }
 
 // TODO: Move and test
@@ -157,7 +155,7 @@ func getCurrentLicenses(script string) (map[string]string, error) {
 
 // TODO: Test
 func handleUnknownLicense(
-	license, dependency string,
+	license string, dependency *string,
 	tui *tui.TUI,
 ) bool {
 	if environment.IsInteractive() {
