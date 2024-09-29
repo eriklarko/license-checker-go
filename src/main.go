@@ -212,7 +212,7 @@ func askToChooseCuratedList(s *curatedlists.Service, tui *tui.TUI) {
 		panic(err)
 	}
 
-	suggestedList, description, err := s.GetHigestRatedList()
+	suggestedList, description, err := s.GetHighlyRatedList()
 	if err != nil {
 		slog.Error("failed to get default list", "error", err)
 	}

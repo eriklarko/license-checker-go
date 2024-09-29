@@ -106,6 +106,11 @@ func (m *MockServer) AddStringResponse(path string, body string) {
 	m.AddResponse(path, NewStringResponse(body))
 }
 
+func (m *MockServer) Reset() {
+	m.responses = make(map[string]http.Response)
+	m.hitCount = make(map[string]int)
+}
+
 func NewYamlResponse(body map[string]any) http.Response {
 	yamlBody, err := yaml.Marshal(body)
 	if err != nil {

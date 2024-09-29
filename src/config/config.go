@@ -190,6 +190,7 @@ func (c *Config) ReadLicenseMap() (map[string]bool, error) {
 	return licenseMap, nil
 }
 
+// TODO: test
 func (c *Config) PersistCuratedListChoice(listName string) error {
 	c.SelectedCuratedList = listName
 	return c.Write()

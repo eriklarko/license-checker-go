@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ListResponse defines the shape we expect the response from the curated lists
+// ListMetadata defines the shape we expect the response from the curated lists
 // endpoint to have.
 // Example:
 //
@@ -28,7 +28,7 @@ import (
 //	less-conservative-list:
 //	  md5: 456
 //	  url: https://example.com/less-conservative-list.yaml
-type ListResponse map[string]ListInfo
+type ListMetadata map[string]ListInfo
 type ListInfo struct {
 	Md5         string `yaml:"md5"`
 	Url         string `yaml:"url"`
@@ -40,6 +40,11 @@ type ListInfo struct {
 type Service struct {
 	config       *config.Config
 	roundTripper http.RoundTripper
+
+	// makes sure only one goroutine reads the lock file at a time
+	lockFileReadLock sync.Mutex
+	// cache the contents of the list lock file
+	lockFile ListMetadata
 }
 
 // New creates a new Service using the provided http.RoundTripper to make requests.
@@ -79,7 +84,7 @@ func (s *Service) DownloadCuratedLists() error {
 	body = io.NopCloser(io.TeeReader(body, &buf))
 
 	// parse the response body
-	var parsedBody ListResponse
+	var parsedBody ListMetadata
 	err = yaml.NewDecoder(body).Decode(&parsedBody)
 	if err != nil {
 		slog.Debug(
@@ -142,14 +147,14 @@ func truncate[T any](s []T, maxLength int) []T {
 	return s[:maxLength]
 }
 
-func (s *Service) writeListLockFile(lists ListResponse) error {
+func (s *Service) writeListLockFile(lists ListMetadata) error {
 
 	// Ensure the cache directory exists
 	if err := os.MkdirAll(s.config.CacheDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create cache directory %s: %w", s.config.CacheDir, err)
 	}
 
-	path := filepath.Join(s.config.CacheDir, "list-lock.yaml")
+	path := s.GetLockFilePath()
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
@@ -201,23 +206,34 @@ func (s *Service) downloadLists() error {
 	return nil
 }
 
-func (s *Service) readListLockFile() (ListResponse, error) {
-	// TODO: consider caching this in memory
+func (s *Service) readListLockFile() (ListMetadata, error) {
+	s.lockFileReadLock.Lock()
+	defer s.lockFileReadLock.Unlock()
 
-	path := filepath.Join(s.config.CacheDir, "list-lock.yaml")
+	if s.lockFile != nil {
+		return s.lockFile, nil
+	}
+
+	path := s.GetLockFilePath()
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 
-	var lists ListResponse
+	var lists ListMetadata
 	err = yaml.NewDecoder(file).Decode(&lists)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode list lock file: %w", err)
+		return nil, fmt.Errorf("failed to decode file: %w", err)
 	}
 
-	return lists, nil
+	// cache contents for future use
+	s.lockFile = lists
+	return s.lockFile, nil
+}
+
+func (s *Service) GetLockFilePath() string {
+	return filepath.Join(s.config.CacheDir, "list-lock.yaml")
 }
 
 // downloadList downloads a single list from the provided URL and saves it to
@@ -282,7 +298,7 @@ func (s *Service) ValidateLocalLists() error {
 		// check if file exists
 		_, err := os.Stat(path)
 		if errors.Is(err, os.ErrNotExist) {
-			errs = append(errs, fmt.Errorf("list %s is missing: %w", listName, err))
+			errs = append(errs, fmt.Errorf("list '%s' is missing: %w", listName, err))
 			continue
 		} else if err != nil {
 			errs = append(errs, fmt.Errorf("failed to check if file %s exists: %w", path, err))
@@ -306,7 +322,7 @@ func (s *Service) ValidateLocalLists() error {
 		// verify md5 sum
 		calculatedMd5 := fmt.Sprintf("%x", md5.Sum(fileContents))
 		if calculatedMd5 != listInfo.Md5 {
-			errs = append(errs, fmt.Errorf("md5 mismatch for list %s: expected %s, got %s", listName, listInfo.Md5, calculatedMd5))
+			errs = append(errs, fmt.Errorf("md5 mismatch for list '%s': expected %s, got %s", listName, listInfo.Md5, calculatedMd5))
 			continue
 		}
 	}
@@ -324,7 +340,7 @@ func (s *Service) ValidateLocalLists() error {
 	}
 }
 
-func (s *Service) GetAllLists() (ListResponse, error) {
+func (s *Service) GetAllLists() (ListMetadata, error) {
 	lists, err := s.readListLockFile()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read list lock file: %w", err)
@@ -333,7 +349,12 @@ func (s *Service) GetAllLists() (ListResponse, error) {
 	return lists, nil
 }
 
-func (s *Service) GetHigestRatedList() (string, string, error) {
+// GetHighlyRatedList returns the name and description of the list with the
+// highest rating.
+//
+// NOTE: The behavior is undefined if there are multiple lists with the same
+// rating
+func (s *Service) GetHighlyRatedList() (string, string, error) {
 	lists, err := s.readListLockFile()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read list lock file: %w", err)
