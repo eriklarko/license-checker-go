@@ -58,6 +58,26 @@ func (t *TUI) scanln(a ...any) {
 	}
 }
 
+func (t *TUI) PrintList(header string, listItems []any, indicator string) {
+	t.Println(header)
+	for i, item := range listItems {
+		indicatorString := indicator
+		if indicator == "#" {
+			currentNumber := i + 1
+			currentNumberString := fmt.Sprintf("%d", currentNumber)
+			// use numbers for the indicator
+			highestNumber := len(listItems)
+			widestNumber := len(fmt.Sprintf("%d", highestNumber))
+
+			currentNumberWidth := len(currentNumberString)
+			widthDifference := widestNumber - currentNumberWidth
+
+			indicatorString = strings.Repeat(" ", widthDifference) + currentNumberString + ":"
+		}
+		t.Printf(" %s %s\n", indicatorString, item)
+	}
+}
+
 func (t *TUI) Ask(question string, possibleAnswers ...string) string {
 	if len(possibleAnswers) > 5 {
 		index := t.AskMultipleChoice(question, possibleAnswers...)

@@ -31,9 +31,17 @@ func (r *Report) RecordDisallowed(license string, dependency string) {
 	r.Disallowed[license] = append(r.Disallowed[license], dependency)
 }
 
+func (r *Report) HasDisallowedLicenses() bool {
+	return len(r.Disallowed) > 0
+}
+
 func (r *Report) RecordUnknownLicense(license string, dependency string) {
 	if r.Unknown == nil {
 		r.Unknown = make(map[string][]string)
 	}
 	r.Unknown[license] = append(r.Unknown[license], dependency)
+}
+
+func (r *Report) HasUnknownLicenses() bool {
+	return len(r.Unknown) > 0
 }

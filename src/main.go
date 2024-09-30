@@ -14,7 +14,10 @@ import (
 	"github.com/eriklarko/license-checker/src/config"
 	"github.com/eriklarko/license-checker/src/curatedlists"
 	"github.com/eriklarko/license-checker/src/environment"
+	"github.com/eriklarko/license-checker/src/licensedescriber"
+	"github.com/eriklarko/license-checker/src/phraser"
 	"github.com/eriklarko/license-checker/src/tui"
+	"github.com/samber/lo"
 )
 
 const defaultConfigFilePath = ".license-checker.yaml"
@@ -58,6 +61,7 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{})))
 	}
 
+	// detect if the tool needs to be set up
 	if _, err := os.Stat(config.LicensesFile); os.IsNotExist(err) {
 		if environment.IsInteractive() {
 			curatedlistsService := curatedlists.New(config, http.DefaultTransport)
@@ -68,14 +72,18 @@ func main() {
 		}
 	}
 
-	// if config.LicensesScript doesn't exist, guide the user to set it up
+	// TODO: if config.LicensesScript doesn't exist, guide the user to set it up
 	// we need a set of scripts for well-known package managers
 	currentLicenses, err := getCurrentLicenses(config.LicensesScript)
 	if err != nil {
 		panic(err)
 	}
 
-	licenseChecker.ValidateCurrentLicenses(currentLicenses)
+	if environment.IsInteractive() {
+		runInteractive(tui, licenseChecker, currentLicenses)
+	} else {
+		runNonInteractive(licenseChecker, currentLicenses)
+	}
 }
 
 func setUpConfig() (*config.Config, error) {
@@ -122,6 +130,7 @@ func setUpLicenseChecker(conf *config.Config) (*checker.LicenseChecker, error) {
 }
 
 // TODO: Move and test
+// For JS, look at https://github.com/franciscop/legally
 func getCurrentLicenses(script string) (map[string]string, error) {
 	cmd := exec.Command(script)
 
@@ -153,25 +162,26 @@ func getCurrentLicenses(script string) (map[string]string, error) {
 	return licenses, nil
 }
 
-// TODO: Test
-func handleUnknownLicense(
-	license string, dependency *string,
-	tui *tui.TUI,
-) bool {
-	if environment.IsInteractive() {
-		return tui.AskYesNo(
-			"Unknown license %s from %s detected. Should it be allowed?",
-			license,
-			dependency,
-		)
-	} else {
-		printInteractiveInstructions(
-			"Unknown license detected. To decide if the license is allowed or not, please run this tool again interactively.",
-			"license", license,
-		)
-		return false
+func runNonInteractive(licenseChecker *checker.LicenseChecker, currentLicenses map[string]string) {
+	slog.Warn(getDisclaimer())
+
+	report, err := licenseChecker.ValidateCurrentLicenses(currentLicenses)
+	if err != nil {
+		panic(err)
 	}
 
+	if report.HasDisallowedLicenses() {
+		slog.Error("Disallowed licenses detected", "licenses", report.Disallowed)
+		os.Exit(1)
+	}
+
+	if report.HasUnknownLicenses() {
+		printInteractiveInstructions(
+			"Unknown licenses detected. To decide if they are allowed or not, please run this tool again interactively.",
+			"licenses", report.Unknown,
+		)
+		os.Exit(1)
+	}
 }
 
 func printInteractiveInstructions(message string, args ...any) {
@@ -184,10 +194,66 @@ func printInteractiveInstructions(message string, args ...any) {
 	)
 }
 
+func getDisclaimer() string {
+	return "DISCLAIMER: THIS IS NOT LEGAL ADVICE. YOU ARE RESPONSIBLE FOR ENSURING THAT YOUR PROJECT COMPLIES WITH ALL APPLICABLE LAWS AND LICENSES."
+}
+
+func runInteractive(tui *tui.TUI, licenseChecker *checker.LicenseChecker, currentLicenses map[string]string) {
+	phraser := phraser.New([]string{
+		"To start let's look at license %s",
+		"Next up license %s",
+		"Let's look at %s",
+		"Let's think about %s",
+		"Next up is %s",
+		"Let's consider %s",
+	})
+
+	licenseDescriber := licensedescriber.NewTLDRDescriber()
+
+	// validate licenses until there are no unknown licenses
+	for {
+		report, err := licenseChecker.ValidateCurrentLicenses(currentLicenses)
+		if err != nil {
+			panic(err)
+		}
+
+		if report.HasDisallowedLicenses() {
+			// TODO: tell user they need to remove the disallowed dependencies or allow the license
+		}
+
+		if report.HasUnknownLicenses() {
+			tui.Printf("Okay, so we found %d unknown license(s). Let's go through them one by one\n", len(report.Unknown))
+
+			for license, dependencies := range report.Unknown {
+				tui.Println(phraser.Get(license))
+
+				description, err := licenseDescriber.Describe(license)
+				if err != nil {
+					slog.Warn("Failed to describe license", "license", license, "error", err)
+				} else {
+					tui.Printf("\n%s\n", description)
+				}
+
+				if len(dependencies) == 1 {
+					tui.Printf("It's currently only used by dependency %s\n", dependencies[0])
+				} else {
+					tui.PrintList("It's used by the following dependencies:", lo.ToAnySlice(dependencies), "#")
+				}
+			}
+		} else {
+			break
+		}
+	}
+}
+
 func askToChooseCuratedList(s *curatedlists.Service, tui *tui.TUI) {
 	tui.Println("It seems no choices around which licenses are allowed or not have been made yet.")
 	tui.Println("We can download some predefined lists of licenses to get you started.")
 	tui.Println("They aren't perfect and you're likely to have to make some adjustments, but we'll go through all that together")
+
+	// TODO: test that the disclaimer is printed
+	tui.Println()
+	tui.Println(getDisclaimer())
 	tui.Println()
 
 	choice := tui.AskMultipleChoice(

@@ -75,3 +75,19 @@ func TestRecordDecision(t *testing.T) {
 		report.Disallowed,
 	)
 }
+
+func TestHasDisallowedLicenses(t *testing.T) {
+	report := &Report{}
+	assert.False(t, report.HasDisallowedLicenses())
+
+	report.RecordDisallowed("MIT", "github.com/example/repo")
+	assert.True(t, report.HasDisallowedLicenses())
+}
+
+func TestHasUnknownLicenses(t *testing.T) {
+	report := &Report{}
+	assert.False(t, report.HasUnknownLicenses())
+
+	report.RecordUnknownLicense("MIT", "github.com/example/repo")
+	assert.True(t, report.HasUnknownLicenses())
+}
