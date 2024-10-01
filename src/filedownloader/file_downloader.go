@@ -1,7 +1,6 @@
 package filedownloader
 
 import (
-	"bytes"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -16,12 +15,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Metadata struct {
-	Url string `yaml:"url"`
-	Md5 string `yaml:"md5"`
+type Metadata interface {
+	GetUrl() string
+	GetMd5() string
 }
 
-type Service struct {
+type Service[T Metadata] struct {
 	// defines what kind of content we are downloading; curated licese lists,
 	// package manager scripts etc
 	contentType string
@@ -47,7 +46,7 @@ type Service struct {
 	// makes sure only one goroutine reads the lock file at a time
 	lockFileReadLock sync.RWMutex
 	// cache the contents of the list lock file
-	lockFile map[string]Metadata // TODO: type extends Metadata
+	lockFile map[string]T
 }
 
 // New creates a new instance of the file downloader service
@@ -57,15 +56,15 @@ type Service struct {
 //	```
 //	downloader := filedownloader.New("curated-lists", "http://example.com/metadata.yaml", "/tmp")
 //	```
-func New(contentType, metadataURL, downloadDir string) *Service {
-	return &Service{
+func New[T Metadata](contentType, metadataURL, downloadDir string) *Service[T] {
+	return &Service[T]{
 		contentType: contentType,
 		metadataURL: metadataURL,
 		downloadDir: downloadDir,
 	}
 }
 
-func (s *Service) DownloadMetadata() error {
+func (s *Service[T]) DownloadMetadata() error {
 	slog.Info("Fetching metadata", "endpoint", s.metadataURL, "content_type", s.contentType)
 
 	// Fetch the list of curated files
@@ -75,26 +74,7 @@ func (s *Service) DownloadMetadata() error {
 	}
 	defer body.Close()
 
-	// set up body to be read twice. First just read like normal, then the body
-	// is available in `buf`. This allows us to parse the body and log it in
-	// case of errors
-	buf := bytes.Buffer{}
-	body = io.NopCloser(io.TeeReader(body, &buf))
-
-	// parse the response body
-	var parsedBody map[string]Metadata
-	err = yaml.NewDecoder(body).Decode(&parsedBody)
-	if err != nil {
-		slog.Debug(
-			"failed to parse response body",
-			"content_type", s.contentType,
-			"error", err,
-			"body", string(truncate(buf.Bytes(), 100)),
-		)
-		return fmt.Errorf("failed to parse response body: %w", err)
-	}
-
-	err = s.writeLockFile(parsedBody)
+	err = s.writeLockFile(body)
 	if err != nil {
 		return fmt.Errorf("failed to write lock file: %w", err)
 	}
@@ -102,7 +82,7 @@ func (s *Service) DownloadMetadata() error {
 	return nil
 }
 
-func (s *Service) executeGetRequest(endpoint string) (io.ReadCloser, error) {
+func (s *Service[T]) executeGetRequest(endpoint string) (io.ReadCloser, error) {
 	resp, err := http.DefaultClient.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
@@ -126,7 +106,7 @@ func truncate[T any](s []T, maxLength int) []T {
 	return s[:maxLength]
 }
 
-func (s *Service) writeLockFile(lists map[string]Metadata) error {
+func (s *Service[T]) writeLockFile(contents io.Reader) error {
 	s.lockFileReadLock.Lock()
 	defer s.lockFileReadLock.Unlock()
 
@@ -142,7 +122,7 @@ func (s *Service) writeLockFile(lists map[string]Metadata) error {
 	}
 	defer file.Close()
 
-	err = yaml.NewEncoder(file).Encode(lists)
+	_, err = io.Copy(file, contents)
 	if err != nil {
 		return fmt.Errorf("failed to write lock file: %w", err)
 	}
@@ -150,7 +130,7 @@ func (s *Service) writeLockFile(lists map[string]Metadata) error {
 	return nil
 }
 
-func (s *Service) GetLockFileContents() (map[string]Metadata, error) {
+func (s *Service[T]) GetLockFileContents() (map[string]T, error) {
 	s.lockFileReadLock.RLock()
 	defer s.lockFileReadLock.RUnlock()
 
@@ -165,28 +145,28 @@ func (s *Service) GetLockFileContents() (map[string]Metadata, error) {
 	}
 	defer file.Close()
 
-	var lists map[string]Metadata
-	err = yaml.NewDecoder(file).Decode(&lists)
+	var metadatas map[string]T
+	err = yaml.NewDecoder(file).Decode(&metadatas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode file: %w", err)
 	}
 
 	// cache contents for future use
-	s.lockFile = lists
+	s.lockFile = metadatas
 	return s.lockFile, nil
 }
 
-func (s *Service) GetDownloadDir() string {
+func (s *Service[T]) GetDownloadDir() string {
 	return s.downloadDir
 }
 
-func (s *Service) GetLockFilePath() string {
+func (s *Service[T]) GetLockFilePath() string {
 	return filepath.Join(s.downloadDir, s.contentType+"-lock.yaml")
 }
 
 // Download downloads a file from the internet and stores it in the download directory
 // The `name` parameter is the key in the lock file that corresponds to the file to download
-func (s *Service) Download(name string) error {
+func (s *Service[T]) Download(name string) error {
 	metadatas, err := s.GetLockFileContents() // data is already plural, but you can pluralize it again
 	if err != nil {
 		return fmt.Errorf("failed to read lock file: %w", err)
@@ -196,11 +176,15 @@ func (s *Service) Download(name string) error {
 	if !found {
 		return fmt.Errorf("no metadata found for '%s'", name)
 	}
-	slog.Info("Downloading list", "name", name, "url", metadata.Url)
+	slog.Info("Downloading list", "name", name, "url", metadata.GetUrl())
 
-	body, err := s.executeGetRequest(metadata.Url)
+	if metadata.GetUrl() == "" {
+		return fmt.Errorf("no url found for '%s'", name)
+	}
+
+	body, err := s.executeGetRequest(metadata.GetUrl())
 	if err != nil {
-		return fmt.Errorf("failed to download %s from %s: %w", name, metadata.Url, err)
+		return fmt.Errorf("failed to download %s from %s: %w", name, metadata.GetUrl(), err)
 	}
 	defer body.Close()
 
@@ -212,8 +196,8 @@ func (s *Service) Download(name string) error {
 	}
 
 	calculatedMd5 := fmt.Sprintf("%x", md5.Sum(bodyBytes))
-	if calculatedMd5 != metadata.Md5 {
-		return fmt.Errorf("md5 mismatch for item %s: expected %s, got %s", name, metadata.Md5, calculatedMd5)
+	if calculatedMd5 != metadata.GetMd5() {
+		return fmt.Errorf("md5 mismatch for item %s: expected %s, got %s", name, metadata.GetMd5(), calculatedMd5)
 	}
 
 	err = s.writeToDisk(name, bodyBytes)
@@ -224,7 +208,7 @@ func (s *Service) Download(name string) error {
 	return nil
 }
 
-func (s *Service) writeToDisk(itemName string, body []byte) error {
+func (s *Service[T]) writeToDisk(itemName string, body []byte) error {
 	path := filepath.Join(s.downloadDir, itemName+".yaml")
 	file, err := os.Create(path)
 	if err != nil {
@@ -240,7 +224,7 @@ func (s *Service) writeToDisk(itemName string, body []byte) error {
 	return nil
 }
 
-func (s *Service) TestValidateDownloadedFiles() error {
+func (s *Service[T]) ValidateDownloadedFiles() error {
 	// read list lock file
 	metadata, err := s.GetLockFileContents()
 	if err != nil {
@@ -278,8 +262,8 @@ func (s *Service) TestValidateDownloadedFiles() error {
 
 		// verify md5 sum
 		calculatedMd5 := fmt.Sprintf("%x", md5.Sum(fileContents))
-		if calculatedMd5 != metadatum.Md5 {
-			errs = append(errs, fmt.Errorf("md5 mismatch for file '%s': expected %s, got %s", path, metadatum.Md5, calculatedMd5))
+		if calculatedMd5 != metadatum.GetMd5() {
+			errs = append(errs, fmt.Errorf("md5 mismatch for file '%s': expected %s, got %s", path, metadatum.GetMd5(), calculatedMd5))
 			continue
 		}
 	}

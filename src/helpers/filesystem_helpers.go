@@ -4,21 +4,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
-
-func CreateTempDir(t *testing.T, fileName string) string {
-	t.Helper()
-
-	tmpDir, err := os.MkdirTemp(t.TempDir(), fileName)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.Remove(tmpDir)
-	})
-
-	return tmpDir
-}
 
 // CreateTempFile creates a temporary file in the test's temporary directory,
 // and automatically removes it when the test is done.
@@ -74,4 +63,19 @@ func CreateTempScript(t *testing.T, content string) string {
 	require.NoError(t, err)
 
 	return tmpFile.Name()
+}
+
+func AssertYamlFileExists(t *testing.T, path string, content map[string]any) {
+	t.Helper()
+
+	assert.FileExists(t, path)
+
+	// check that the file contains the expected content
+	fileContent, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	contentBytes, err := yaml.Marshal(content)
+	require.NoError(t, err)
+
+	assert.YAMLEq(t, string(contentBytes), string(fileContent))
 }
