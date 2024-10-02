@@ -79,3 +79,15 @@ func AssertYamlFileExists(t *testing.T, path string, content map[string]any) {
 
 	assert.YAMLEq(t, string(contentBytes), string(fileContent))
 }
+
+func AssertFileExists(t *testing.T, path string, content []byte) {
+	t.Helper()
+
+	assert.FileExists(t, path)
+
+	// check that the file contains the expected content
+	fileContent, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	assert.Equal(t, string(content), string(fileContent))
+}

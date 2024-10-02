@@ -3,12 +3,12 @@ package filedownloader_test
 import (
 	"crypto/md5"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/eriklarko/license-checker/src/filedownloader"
 	helpers_test "github.com/eriklarko/license-checker/src/helpers"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 type Thing struct {
@@ -16,9 +16,9 @@ type Thing struct {
 	Url string `yaml:"url"`
 	Md5 string `yaml:"md5"`
 
-	Name    string         `yaml:"-"`
-	Path    string         `yaml:"-"`
-	Content map[string]any `yaml:"-"`
+	Name    string        `yaml:"-"`
+	Path    string        `yaml:"-"`
+	Content io.ReadSeeker `yaml:"-"`
 }
 
 func (t *Thing) GetUrl() string {
@@ -49,11 +49,11 @@ func (t *Thing) SetMd5(md5 string) {
 	t.Md5 = md5
 }
 
-func (t *Thing) GetContent() map[string]any {
+func (t *Thing) GetContent() io.ReadSeeker {
 	return t.Content
 }
 
-func (t *Thing) SetContent(content map[string]any) {
+func (t *Thing) SetContent(content io.ReadSeeker) {
 	t.Content = content
 }
 
@@ -69,8 +69,8 @@ type Thinger interface {
 	GetMd5() string
 	SetMd5(md5 string)
 
-	GetContent() map[string]any
-	SetContent(content map[string]any)
+	GetContent() io.ReadSeeker
+	SetContent(content io.ReadSeeker)
 }
 
 func CreateFixtureWithThings[T Thinger](t *testing.T, things ...T) (*filedownloader.Service[T], *helpers_test.MockServer) {
@@ -93,24 +93,23 @@ func NewServerWithThings[T Thinger](t *testing.T, things ...T) *helpers_test.Moc
 	for _, thing := range things {
 		path := thing.GetPath()
 		if path == "" {
-			path = fmt.Sprintf("%s.yaml", thing.GetName())
+			path = fmt.Sprintf("/%s.yaml", thing.GetName())
 		}
 
 		thing.SetUrl(fmt.Sprintf("%s%s", server.URL(), path))
 
 		if thing.GetMd5() == "" {
-			// convert content to yaml and calculate md5
-			if len(thing.GetContent()) == 0 {
-				thing.SetContent(make(map[string]any))
-			}
-			contentBytes, err := yaml.Marshal(thing.GetContent())
+			contentBytes, err := io.ReadAll(thing.GetContent())
 			require.NoError(t, err)
 
 			thing.SetMd5(fmt.Sprintf("%x", md5.Sum(contentBytes)))
+
+			// reset the content reader to the beginning
+			thing.GetContent().Seek(0, io.SeekStart)
 		}
 
 		metadata[thing.GetName()] = thing
-		server.AddYamlResponse(thing.GetUrl(), thing.GetContent())
+		server.AddReaderResponse(thing.GetUrl(), thing.GetContent())
 	}
 
 	server.AddYamlResponse(server.URL()+"/metadata.yaml", metadata)

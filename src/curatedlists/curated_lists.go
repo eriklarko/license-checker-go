@@ -45,12 +45,12 @@ func New(
 ) *Service {
 	return &Service{
 		config:         config,
-		fileDownloader: filedownloader.New[ListInfo]("curated-lists", config.CuratedlistsSource, config.CacheDir),
+		fileDownloader: filedownloader.New[ListInfo]("curated-lists", config.CuratedListsSource, config.CacheDir),
 	}
 }
 
 func (s *Service) DownloadCuratedLists() error {
-	if s.config.CuratedlistsSource == "" {
+	if s.config.CuratedListsSource == "" {
 		return fmt.Errorf("no curated list source set, see README for how to configure this")
 	}
 

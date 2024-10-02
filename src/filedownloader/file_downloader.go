@@ -164,6 +164,10 @@ func (s *Service[T]) GetLockFilePath() string {
 	return filepath.Join(s.downloadDir, s.contentType+"-lock.yaml")
 }
 
+func (s *Service[T]) GetDestinationPath(itemName string) string {
+	return filepath.Join(s.downloadDir, itemName+".yaml")
+}
+
 // Download downloads a file from the internet and stores it in the download directory
 // The `name` parameter is the key in the lock file that corresponds to the file to download
 func (s *Service[T]) Download(name string) error {
@@ -209,7 +213,7 @@ func (s *Service[T]) Download(name string) error {
 }
 
 func (s *Service[T]) writeToDisk(itemName string, body []byte) error {
-	path := filepath.Join(s.downloadDir, itemName+".yaml")
+	path := s.GetDestinationPath(itemName)
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)

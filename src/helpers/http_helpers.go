@@ -106,6 +106,10 @@ func (m *MockServer) AddStringResponse(path string, body string) {
 	m.AddResponse(path, NewStringResponse(body))
 }
 
+func (m *MockServer) AddReaderResponse(path string, body io.Reader) {
+	m.AddResponse(path, NewReaderResponse(body))
+}
+
 func (m *MockServer) Reset() {
 	m.responses = make(map[string]http.Response)
 	m.hitCount = make(map[string]int)
@@ -126,9 +130,13 @@ func NewYamlResponse(body map[string]any) http.Response {
 }
 
 func NewStringResponse(body string) http.Response {
+	return NewReaderResponse(strings.NewReader(body))
+}
+
+func NewReaderResponse(body io.Reader) http.Response {
 	return http.Response{
 		StatusCode: 200,
 		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(body)),
+		Body:       io.NopCloser(body),
 	}
 }

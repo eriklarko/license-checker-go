@@ -1,6 +1,7 @@
 package filedownloader_test
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -66,16 +67,14 @@ func TestDownloadMetadata(t *testing.T) {
 
 func TestDownload(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
-		someContent := map[string]any{
-			"foo": "bar",
-		}
+		someContent := []byte("hello")
 
 		sut, _ := filedownloader_test.CreateFixtureWithThings[*filedownloader_test.Thing](t,
 			&filedownloader_test.Thing{
 				Name:    "thing",
 				Path:    "/thing.yaml",
-				Md5:     "721aad13918f292d25bc9dc7d61b0e9c",
-				Content: someContent,
+				Md5:     "5d41402abc4b2a76b9719d911017c592",
+				Content: bytes.NewReader(someContent),
 			},
 		)
 
@@ -83,7 +82,7 @@ func TestDownload(t *testing.T) {
 		require.NoError(t, err)
 
 		// assert file was downloaded with correct contents
-		helpers_test.AssertYamlFileExists(t,
+		helpers_test.AssertFileExists(t,
 			filepath.Join(sut.GetDownloadDir(), "thing.yaml"),
 			someContent,
 		)
@@ -92,12 +91,10 @@ func TestDownload(t *testing.T) {
 	t.Run("invalid md5", func(t *testing.T) {
 		sut, httpMock := filedownloader_test.CreateFixtureWithThings(t,
 			&filedownloader_test.Thing{
-				Name: "some-name",
-				Path: "/thing.yaml",
-				Md5:  "721aad13918f292d25bc9dc7d61b0e9c",
-				Content: map[string]any{
-					"foo": "bar",
-				},
+				Name:    "some-name",
+				Path:    "/thing.yaml",
+				Md5:     "721aad13918f292d25bc9dc7d61b0e9c",
+				Content: bytes.NewReader([]byte("hello")),
 			},
 		)
 
@@ -118,12 +115,10 @@ func TestValidateDownloadedFiles(t *testing.T) {
 
 	sut, _ := filedownloader_test.CreateFixtureWithThings(t,
 		&filedownloader_test.Thing{
-			Name: "some-name",
-			Path: "/thing.yaml",
-			Md5:  "721aad13918f292d25bc9dc7d61b0e9c",
-			Content: map[string]any{
-				"foo": "bar",
-			},
+			Name:    "some-name",
+			Path:    "/thing.yaml",
+			Md5:     "5d41402abc4b2a76b9719d911017c592",
+			Content: bytes.NewReader([]byte("hello")),
 		},
 	)
 
@@ -155,20 +150,16 @@ func TestLockFileIsCached(t *testing.T) {
 
 	sut, _ := filedownloader_test.CreateFixtureWithThings(t,
 		&filedownloader_test.Thing{
-			Name: "thing1",
-			Path: "thing1.yaml",
-			Md5:  "73411061536ff8a32777eec043ece0e6",
-			Content: map[string]any{
-				"foo:": "bar",
-			},
+			Name:    "thing1",
+			Path:    "thing1.yaml",
+			Md5:     "73411061536ff8a32777eec043ece0e6",
+			Content: bytes.NewReader([]byte("hello")),
 		},
 		&filedownloader_test.Thing{
-			Name: "thing2",
-			Path: "thing2.yaml",
-			Md5:  "fad50251071a2532729e7f4beb79f8ca",
-			Content: map[string]any{
-				"bar:": "baz",
-			},
+			Name:    "thing2",
+			Path:    "thing2.yaml",
+			Md5:     "fad50251071a2532729e7f4beb79f8ca",
+			Content: bytes.NewReader([]byte("hello")),
 		},
 	)
 

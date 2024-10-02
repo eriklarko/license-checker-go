@@ -1,6 +1,7 @@
 package curatedlists_test
 
 import (
+	"bytes"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -12,35 +13,36 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestGetAllLists(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
-	sut, httpMock, _ := createFixtureWithDownloadedLists(t,
-		List{
+	sut, httpMock, _ := createServerEnvironmentWithLists(t,
+		list{
 			Thing: &filedownloader_test.Thing{
 				Name: "list1",
 				Path: "/list1.yaml",
 				Md5:  "73411061536ff8a32777eec043ece0e6",
-				Content: map[string]any{
-					"allowed-licenses":    []string{"MIT"},
-					"disallowed-licenses": []string{"GPL-3.0"},
-				},
 			},
 			Description: "list1 description",
+			YamlContent: map[string]any{
+				"allowed-licenses":    []string{"MIT"},
+				"disallowed-licenses": []string{"GPL-3.0"},
+			},
 		},
-		List{
+		list{
 			Thing: &filedownloader_test.Thing{
 				Name: "list2",
 				Path: "/list2.yaml",
 				Md5:  "fad50251071a2532729e7f4beb79f8ca",
-				Content: map[string]any{
-					"allowed-licenses":    []string{"MIT", "Apache-2.0", "GPL-3.0"},
-					"disallowed-licenses": []string{},
-				},
 			},
 			Description: "list2 description",
+			YamlContent: map[string]any{
+				"allowed-licenses":    []string{"MIT", "Apache-2.0", "GPL-3.0"},
+				"disallowed-licenses": []string{},
+			},
 		},
 	)
 
@@ -67,7 +69,7 @@ func TestGetHighestRatedList(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	testCases := map[string]struct {
-		lists            []List
+		lists            []list
 		expectedListName string
 	}{
 		"empty list": {
@@ -75,7 +77,7 @@ func TestGetHighestRatedList(t *testing.T) {
 			expectedListName: "",
 		},
 		"single list": {
-			lists: []List{
+			lists: []list{
 				{
 					Thing: &filedownloader_test.Thing{
 						Name: "list1",
@@ -87,7 +89,7 @@ func TestGetHighestRatedList(t *testing.T) {
 			expectedListName: "list1",
 		},
 		"multiple lists": {
-			lists: []List{
+			lists: []list{
 				{
 					Thing: &filedownloader_test.Thing{
 						Name: "list1",
@@ -116,12 +118,12 @@ func TestGetHighestRatedList(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			sut, _, _ := createFixtureWithDownloadedLists(t, tc.lists...)
+			sut, _, _ := createServerEnvironmentWithLists(t, tc.lists...)
 
-			var expectedList List
+			var expectedList list
 			if len(tc.lists) == 0 {
 				// if there are no lists, the we expect "" for name and description
-				expectedList = List{
+				expectedList = list{
 					Thing: &filedownloader_test.Thing{
 						Name: "",
 					},
@@ -133,7 +135,7 @@ func TestGetHighestRatedList(t *testing.T) {
 				// the test case, we infer the expected description here by
 				// searching for the list with the expected name
 				var found bool
-				expectedList, found = lo.Find(tc.lists, func(list List) bool {
+				expectedList, found = lo.Find(tc.lists, func(list list) bool {
 					return list.Name == tc.expectedListName
 				})
 				require.True(t, found, "expected list not found in test case")
@@ -152,14 +154,14 @@ func TestSelectList(t *testing.T) {
 		"allowed-licenses":    []string{"MIT"},
 		"disallowed-licenses": []string{"GPL-3.0"},
 	}
-	sut, _, conf := createFixtureWithDownloadedLists(t,
-		List{
+	sut, _, conf := createServerEnvironmentWithLists(t,
+		list{
 			Thing: &filedownloader_test.Thing{
-				Name:    "list1",
-				Path:    "/list1.yaml",
-				Content: listContent,
+				Name: "list1",
+				Path: "/list1.yaml",
 			},
 			Description: "list1 description",
+			YamlContent: listContent,
 		},
 	)
 
@@ -179,14 +181,25 @@ func TestSelectList(t *testing.T) {
 	})
 }
 
-type List struct {
+type list struct {
 	*filedownloader_test.Thing `yaml:",inline"`
+
+	YamlContent map[string]any `yaml:"-"`
 
 	Description string  `yaml:"description"`
 	Rating      float32 `yaml:"rating"`
 }
 
-func createFixtureWithDownloadedLists(t *testing.T, lists ...List) (*curatedlists.Service, *helpers_test.MockServer, *config.Config) {
+func createServerEnvironmentWithLists(t *testing.T, lists ...list) (*curatedlists.Service, *helpers_test.MockServer, *config.Config) {
+	for _, list := range lists {
+		if list.Content == nil {
+			yamlBody, err := yaml.Marshal(list.YamlContent)
+			require.NoError(t, err)
+
+			list.Content = bytes.NewReader(yamlBody)
+		}
+	}
+
 	server := filedownloader_test.NewServerWithThings(t, lists...)
 	t.Cleanup(func() {
 		server.Close()
@@ -194,7 +207,7 @@ func createFixtureWithDownloadedLists(t *testing.T, lists ...List) (*curatedlist
 
 	conf := &config.Config{
 		CacheDir:           t.TempDir(),
-		CuratedlistsSource: server.URL() + "/metadata.yaml",
+		CuratedListsSource: server.URL() + "/metadata.yaml",
 		Path:               helpers_test.CreateTempFile(t, "config").Name(),
 	}
 

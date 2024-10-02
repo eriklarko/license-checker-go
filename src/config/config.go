@@ -17,8 +17,10 @@ type Config struct {
 	CacheDir       string `yaml:"cache-dir"`
 
 	// optional values
-	CuratedlistsSource  string `yaml:"curated-list-source"`
+	CuratedListsSource  string `yaml:"curated-list-source"`
 	SelectedCuratedList string `yaml:"selected-curated-list,omitempty"`
+
+	CuratedScriptsSource string `yaml:"curated-scripts-source,omitempty"`
 
 	// the file this config was read from
 	Path string `yaml:"-"` // not serialized
@@ -64,8 +66,8 @@ func (c *Config) applyDefaults() {
 		c.LicensesFile = filepath.Join(c.CacheDir, "licenses.csv")
 	}
 
-	if c.CuratedlistsSource == "" {
-		c.CuratedlistsSource = "https://raw.githubusercontent.com/eriklarko/license-checker-go/refs/heads/main/lists/list-metadata.yaml"
+	if c.CuratedListsSource == "" {
+		c.CuratedListsSource = "https://raw.githubusercontent.com/eriklarko/license-checker-go/refs/heads/main/lists/list-metadata.yaml"
 	}
 
 	if c.Path == "" {
