@@ -15,13 +15,12 @@ func New(directory string) *Service {
 
 func (s *Service) FindLikelyPackageManagers() ([]string, error) {
 	// if file exists, return the package manager
-	// if file does not exist, return nil
 	filesToPackageManager := map[string]string{
-		"npm":    "package.json",
-		"go":     "go.mod",
-		"pip":    "requirements.txt",
-		"maven":  "pom.xml",
-		"gradle": "build.gradle",
+		"npm":        "package.json",
+		"go modules": "go.mod",
+		"pip":        "requirements.txt",
+		"maven":      "pom.xml",
+		"gradle":     "build.gradle",
 	}
 
 	var detectedPackageManagers []string

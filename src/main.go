@@ -52,7 +52,7 @@ func main() {
 
 	if environment.IsInteractive() {
 		logFilePath := "license-checker.log"
-		tui.Printf("All logs are written to to %s\n", logFilePath)
+		tui.Printf("Logs are written to %s\n", logFilePath)
 		tui.Println()
 
 		// open file, creating one if it doesnt exist
@@ -67,9 +67,16 @@ func main() {
 
 	// detect if the tool needs to be set up
 	if _, err := os.Stat(config.LicensesFile); os.IsNotExist(err) {
-		if environment.IsInteractive() {
-			curatedlistsService := curatedlists.New(config)
+		curatedlistsService := curatedlists.New(config)
+		if config.SelectedCuratedList != "" {
+			slog.Warn("License file for list %s not found. Downloading it", "list", config.SelectedCuratedList)
+			err := curatedlistsService.DownloadList(config.SelectedCuratedList)
+			if err != nil {
+				panic(err)
+			}
+		} else if environment.IsInteractive() {
 			askToChooseCuratedList(curatedlistsService, tui)
+			tui.Println()
 		} else {
 			printInteractiveInstructions("No license file found. Please run this tool interactively to set everything up.")
 			os.Exit(1)
@@ -87,6 +94,7 @@ func main() {
 			cls := curatedlicensescripts.New(config)
 
 			askToChooseLicensesScript(pmd, cls, config, tui)
+			tui.Println()
 		} else {
 			printInteractiveInstructions(
 				"Couldn't find script used to get current licenses. Please run this tool interactively to set everything up.",
@@ -358,7 +366,7 @@ func askToChooseLicensesScript(
 	conf *config.Config,
 	tui *tui.TUI,
 ) {
-	tui.Println("It seems we don't have a script to get the current licenses.")
+	tui.Println("There's no script set up to get the current licenses of your project.")
 	tui.Println("We'll go through the process of setting that up together.")
 	tui.Println()
 	//tui.Println("The script should output a list of projects and their licenses, separated by commas.")
@@ -369,14 +377,19 @@ func askToChooseLicensesScript(
 	}
 
 	if len(detectedPackageManagers) == 1 {
-		tui.Println("It seems your project uses %s", detectedPackageManagers[0])
-		if tui.AskYesNo("Do you want to use a preset script reading licenses for %s?", detectedPackageManagers[0]) {
-
-			selectLicenseScript(detectedPackageManagers[0], cls, conf, tui)
-			return
-		} else {
-			tui.Println("Fair enough, let's set up a script for you to use")
-			tui.Println()
+		scriptExists, err := cls.HasScriptForPackageManager(detectedPackageManagers[0])
+		if err != nil {
+			slog.Warn("Failed to check if script exists for package manager", "package_manager", detectedPackageManagers[0], "error", err)
+		} else if scriptExists {
+			tui.Printf("It seems your project uses %s\n", detectedPackageManagers[0])
+			if tui.AskYesNo("Do you want to use a preset script reading licenses for %s?", detectedPackageManagers[0]) {
+				tui.Println("Great! Setting that up for you...")
+				cls.SelectScript(detectedPackageManagers[0])
+				return
+			} else {
+				tui.Println("Fair enough, let's set up a script for you to use")
+				tui.Println()
+			}
 		}
 
 	} else if len(detectedPackageManagers) > 1 {
@@ -392,7 +405,7 @@ func askToChooseLicensesScript(
 			tui.Println()
 		} else {
 			tui.Printf("Great! Setting that up for you...")
-			selectLicenseScript(detectedPackageManagers[choice], cls, conf, tui)
+			cls.SelectScript(detectedPackageManagers[choice])
 			return
 		}
 
@@ -401,19 +414,10 @@ func askToChooseLicensesScript(
 	}
 
 	path := tui.FilePicker("Please provide the path to a script that outputs a list of projects and their licenses, separated by commas")
-}
-
-func selectLicenseScript(pm string, cls *curatedlicensescripts.Service, conf *config.Config, tui *tui.TUI) {
 	tui.Println("Great! Setting that up for you...")
 
-	path, err := cls.DownloadScript(pm)
-	if err != nil {
-		panic(err)
-	}
-
 	conf.LicensesScript = path
-	err = conf.Write()
-	if err != nil {
+	if err = conf.Write(); err != nil {
 		panic(err)
 	}
 }

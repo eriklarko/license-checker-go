@@ -93,10 +93,16 @@ func (s *Service) GetHighlyRatedList() (string, string, error) {
 	return bestListName, bestListInfo.Description, nil
 }
 
+func (s *Service) DownloadList(listName string) error {
+	return s.fileDownloader.Download(listName)
+}
+
 func (s *Service) SelectList(listName string) error {
-	err := s.fileDownloader.Download(listName)
+	err := s.DownloadList(listName)
 	if err != nil {
-		return fmt.Errorf("failed to download list %s: %w", listName, err)
+		return fmt.Errorf("failed to download list: %w", err)
 	}
-	return s.config.PersistCuratedListChoice(listName)
+
+	s.config.SelectedCuratedList = listName
+	return s.config.Write()
 }

@@ -52,6 +52,7 @@ func (t *TUI) onPrintError(err error) {
 func (t *TUI) scanln(a ...any) {
 	_, err := fmt.Fscanln(t.input, a...)
 
+	// TODO: if unexpected newline
 	if err != nil {
 		slog.Error("failed to read user input", "error", err)
 		panic("failed to read user input: " + err.Error())
@@ -135,6 +136,33 @@ func (t *TUI) AskMultipleChoice(question string, answers ...string) int {
 			return response - 1
 		}
 	}
+}
+
+func (t *TUI) FilePicker(msg string) string {
+	if strings.HasSuffix(msg, ":") {
+		msg += " "
+	} else if !strings.HasSuffix(msg, ": ") {
+		msg += ": "
+	}
+
+	var response string
+	for {
+		t.Println(msg)
+		t.scanln(&response)
+
+		if response == "" {
+			continue
+		}
+
+		if _, err := os.Stat(response); os.IsNotExist(err) {
+			t.Println("File does not exist, please try again.")
+			continue
+		}
+
+		break
+	}
+
+	return response
 }
 
 func (t *TUI) NewProgressIndicator() *ProgressIndicator {

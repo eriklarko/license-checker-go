@@ -13,8 +13,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestService_DownloadScript(t *testing.T) {
+func TestService_HasScriptForPackageManager(t *testing.T) {
+	availableScripts := []script{
+		{
+			Thing: &filedownloader_test.Thing{
+				Name: "npm",
+				Path: "/scripts/npm.sh",
+			},
+			ScriptContent: "echo 'HAH!'",
+		},
+	}
 
+	t.Run("Downloads lock file if it doesn't exist", func(t *testing.T) {
+		sut, httpServer, config := createServerEnvironmentWithScripts(t, availableScripts...)
+
+		_, err := sut.HasScriptForPackageManager("npm")
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, httpServer.GetHitCount("/metadata.yaml"))
+		assert.FileExists(t, config.CacheDir+"/curated-license-scripts-lock.yaml")
+	})
+
+	t.Run("Does not download lock file if it exists", func(t *testing.T) {
+		sut, httpServer, _ := createServerEnvironmentWithScripts(t, availableScripts...)
+
+		err := sut.DownloadCuratedScripts()
+		require.NoError(t, err)
+
+		_, err = sut.HasScriptForPackageManager("npm")
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, httpServer.GetHitCount("/metadata.yaml"))
+	})
+
+	t.Run("Returns true if script exists", func(t *testing.T) {
+		sut, _, _ := createServerEnvironmentWithScripts(t, availableScripts...)
+
+		exists, err := sut.HasScriptForPackageManager("npm")
+		require.NoError(t, err)
+
+		assert.True(t, exists)
+	})
+
+	t.Run("Returns false if script doesn't exists", func(t *testing.T) {
+		sut, _, _ := createServerEnvironmentWithScripts(t, availableScripts...)
+
+		exists, err := sut.HasScriptForPackageManager("foo")
+		require.NoError(t, err)
+
+		assert.False(t, exists)
+	})
+}
+
+func TestService_DownloadScript(t *testing.T) {
 	sut, httpServer, _ := createServerEnvironmentWithScripts(t, script{
 		Thing: &filedownloader_test.Thing{
 			Name: "script1",
@@ -22,15 +73,16 @@ func TestService_DownloadScript(t *testing.T) {
 		},
 		ScriptContent: "echo 'script1'",
 	})
+	err := sut.DownloadCuratedScripts()
+	require.NoError(t, err)
 
 	t.Run("Download known script", func(t *testing.T) {
 		// download the script
 		path, err := sut.DownloadScript("script1")
 		require.NoError(t, err)
 
-		if !strings.HasSuffix(path, "/script1.yaml") {
-			t.Logf("Expected path to end with '/script1.yaml', but got %s", path)
-			t.FailNow()
+		if !strings.HasSuffix(path, "/script1") {
+			t.Fatalf("Expected path to end with '/script1', got '%s'", path)
 		}
 
 		// check that the script was downloaded correctly
@@ -80,8 +132,5 @@ func createServerEnvironmentWithScripts(t *testing.T, scripts ...script) (*curat
 	}
 
 	sut := curatedlicensescripts.New(conf)
-	err := sut.DownloadCuratedScripts()
-	require.NoError(t, err)
-
 	return sut, server, conf
 }

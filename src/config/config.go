@@ -20,7 +20,8 @@ type Config struct {
 	CuratedListsSource  string `yaml:"curated-list-source"`
 	SelectedCuratedList string `yaml:"selected-curated-list,omitempty"`
 
-	CuratedScriptsSource string `yaml:"curated-scripts-source,omitempty"`
+	CuratedScriptsSource  string `yaml:"curated-scripts-source,omitempty"`
+	SelectedCuratedScript string `yaml:"selected-curated-script,omitempty"`
 
 	// the file this config was read from
 	Path string `yaml:"-"` // not serialized
@@ -190,12 +191,6 @@ func (c *Config) ReadLicenseMap() (map[string]bool, error) {
 	}
 
 	return licenseMap, nil
-}
-
-// TODO: test
-func (c *Config) PersistCuratedListChoice(listName string) error {
-	c.SelectedCuratedList = listName
-	return c.Write()
 }
 
 // String returns the YAML representation of the Config struct.

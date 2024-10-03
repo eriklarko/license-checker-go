@@ -29,12 +29,12 @@ func TestPackageManagerDetector_Detect(t *testing.T) {
 		{
 			name:             "Go package manager file",
 			files:            []string{"go.mod"},
-			expectedManagers: []string{"go"},
+			expectedManagers: []string{"go modules"},
 		},
 		{
 			name:             "Multiple package manager files",
 			files:            []string{"package.json", "go.mod", "requirements.txt"},
-			expectedManagers: []string{"npm", "go", "pip"},
+			expectedManagers: []string{"npm", "go modules", "pip"},
 		},
 	}
 

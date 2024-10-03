@@ -41,6 +41,31 @@ func New(
 	}
 }
 
+func (s *Service) HasScriptForPackageManager(packageManager string) (bool, error) {
+	lockFileExists, err := packagemanagerdetector.FileExists(s.fileDownloader.GetLockFilePath())
+	if err != nil {
+		return false, fmt.Errorf("failed to check if lock file exists: %w", err)
+	}
+	if !lockFileExists {
+		err := s.DownloadCuratedScripts()
+		if err != nil {
+			return false, fmt.Errorf("failed to download curated scripts: %w", err)
+		}
+	}
+
+	scripts, err := s.fileDownloader.GetLockFileContents()
+	if err != nil {
+		return false, fmt.Errorf("failed to read lock file: %w", err)
+	}
+
+	for script := range scripts {
+		if script == packageManager {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *Service) DownloadCuratedScripts() error {
 	if s.config.CuratedScriptsSource == "" {
 		return fmt.Errorf("no curated script source set, see README for how to configure this")
@@ -50,9 +75,12 @@ func (s *Service) DownloadCuratedScripts() error {
 }
 
 func (s *Service) DownloadScript(packageManager string) (string, error) {
-	path := s.fileDownloader.GetDestinationPath(packageManager)
-
 	// No need to download the script if it already exists
+	path, err := s.fileDownloader.GetDestinationPath(packageManager)
+	if err != nil {
+		return "", fmt.Errorf("failed to get destination path for package manager '%s': %w", packageManager, err)
+	}
+
 	exists, err := packagemanagerdetector.FileExists(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to check if script for package manager '%s' exists: %w", packageManager, err)
@@ -66,4 +94,15 @@ func (s *Service) DownloadScript(packageManager string) (string, error) {
 	}
 
 	return path, nil
+}
+
+func (s *Service) SelectScript(packageManager string) error {
+	path, err := s.DownloadScript(packageManager)
+	if err != nil {
+		return fmt.Errorf("failed to download script: %w", err)
+	}
+
+	s.config.LicensesScript = path
+	s.config.SelectedCuratedScript = packageManager
+	return s.config.Write()
 }

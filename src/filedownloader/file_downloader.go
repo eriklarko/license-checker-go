@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,12 +111,14 @@ func (s *Service[T]) writeLockFile(contents io.Reader) error {
 	s.lockFileReadLock.Lock()
 	defer s.lockFileReadLock.Unlock()
 
+	path := s.GetLockFilePath()
+	slog.Info("Writing lock file", "path", path, "content_type", s.contentType)
+
 	// Ensure the working directory exists
 	if err := os.MkdirAll(s.downloadDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create cache directory %s: %w", s.downloadDir, err)
 	}
 
-	path := s.GetLockFilePath()
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
@@ -128,6 +131,38 @@ func (s *Service[T]) writeLockFile(contents io.Reader) error {
 	}
 
 	return nil
+}
+
+func (s *Service[T]) GetLockFilePath() string {
+	return filepath.Join(s.downloadDir, s.contentType+"-lock.yaml")
+}
+
+func (s *Service[T]) GetDestinationPath(itemName string) (string, error) {
+	metadata, err := s.GetMetadata(itemName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get metadata for item '%s': %w", itemName, err)
+	}
+
+	url, err := url.Parse((*metadata).GetUrl())
+	if err != nil {
+		return "", fmt.Errorf("failed to parse url %s: %w", (*metadata).GetUrl(), err)
+	}
+
+	return filepath.Join(s.downloadDir, url.Path), nil
+}
+
+func (s *Service[T]) GetMetadata(itemName string) (*T, error) {
+	metadatas, err := s.GetLockFileContents()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read lock file: %w", err)
+	}
+
+	metadata, found := metadatas[itemName]
+	if !found {
+		return nil, fmt.Errorf("no metadata found for item '%s'", itemName)
+	}
+
+	return &metadata, nil
 }
 
 func (s *Service[T]) GetLockFileContents() (map[string]T, error) {
@@ -156,30 +191,20 @@ func (s *Service[T]) GetLockFileContents() (map[string]T, error) {
 	return s.lockFile, nil
 }
 
-func (s *Service[T]) GetDownloadDir() string {
-	return s.downloadDir
-}
-
-func (s *Service[T]) GetLockFilePath() string {
-	return filepath.Join(s.downloadDir, s.contentType+"-lock.yaml")
-}
-
-func (s *Service[T]) GetDestinationPath(itemName string) string {
-	return filepath.Join(s.downloadDir, itemName+".yaml")
-}
-
 // Download downloads a file from the internet and stores it in the download directory
 // The `name` parameter is the key in the lock file that corresponds to the file to download
 func (s *Service[T]) Download(name string) error {
-	metadatas, err := s.GetLockFileContents() // data is already plural, but you can pluralize it again
+	mp, err := s.GetMetadata(name)
 	if err != nil {
-		return fmt.Errorf("failed to read lock file: %w", err)
+		return fmt.Errorf("failed to get metadata for item '%s': %w", name, err)
+	}
+	metadata := *mp
+
+	destinationFile, err := s.GetDestinationPath(name)
+	if err != nil {
+		return fmt.Errorf("failed to get destination path for item '%s': %w", name, err)
 	}
 
-	metadata, found := metadatas[name]
-	if !found {
-		return fmt.Errorf("no metadata found for '%s'", name)
-	}
 	slog.Info("Downloading list", "name", name, "url", metadata.GetUrl())
 
 	if metadata.GetUrl() == "" {
@@ -204,7 +229,7 @@ func (s *Service[T]) Download(name string) error {
 		return fmt.Errorf("md5 mismatch for item %s: expected %s, got %s", name, metadata.GetMd5(), calculatedMd5)
 	}
 
-	err = s.writeToDisk(name, bodyBytes)
+	err = s.writeToDisk(destinationFile, bodyBytes)
 	if err != nil {
 		return fmt.Errorf("failed to write item %s to disk: %w", name, err)
 	}
@@ -212,8 +237,7 @@ func (s *Service[T]) Download(name string) error {
 	return nil
 }
 
-func (s *Service[T]) writeToDisk(itemName string, body []byte) error {
-	path := s.GetDestinationPath(itemName)
+func (s *Service[T]) writeToDisk(path string, body []byte) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
@@ -222,7 +246,7 @@ func (s *Service[T]) writeToDisk(itemName string, body []byte) error {
 
 	_, err = file.Write(body)
 	if err != nil {
-		return fmt.Errorf("failed to write item %s to disk: %w", itemName, err)
+		return fmt.Errorf("failed to write file %s to disk: %w", path, err)
 	}
 
 	return nil
@@ -283,4 +307,8 @@ func (s *Service[T]) ValidateDownloadedFiles() error {
 		}
 		return fmt.Errorf("multiple errors occurred: %s", strings.Join(errMsgs, "; "))
 	}
+}
+
+func (s *Service[T]) GetDownloadDir() string {
+	return s.downloadDir
 }
