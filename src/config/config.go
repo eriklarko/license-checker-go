@@ -62,7 +62,7 @@ func (c *Config) applyDefaults() {
 		c.LicensesScript = filepath.Join(c.CacheDir, "print-current-licenses.sh")
 	}
 	if c.LicensesFile == "" {
-		c.LicensesFile = filepath.Join(c.CacheDir, "licenses.csv")
+		c.LicensesFile = filepath.Join(c.CacheDir, "licenses.yaml")
 	}
 
 	if c.CuratedListsSource == "" {

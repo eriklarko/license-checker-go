@@ -97,8 +97,8 @@ func TestValidateCurrentLicenses(t *testing.T) {
 
 func TestNewFromFile(t *testing.T) {
 	t.Run("valid content", func(t *testing.T) {
-		content := `MIT,true
-GPL-3.0,false
+		content := `MIT: true
+GPL-3.0: false
 `
 		licensesFile := helpers_test.CreateTempFileWithContents(t, content)
 
@@ -113,8 +113,8 @@ GPL-3.0,false
 	})
 
 	t.Run("invalid content", func(t *testing.T) {
-		content := `MIT,true
-GPL-3.0,notabool`
+		content := `MIT:true
+GPL-3.0:notabool`
 		licensesFile := helpers_test.CreateTempFileWithContents(t, content)
 
 		_, err := NewFromFile(licensesFile)

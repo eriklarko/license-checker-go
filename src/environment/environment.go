@@ -8,7 +8,7 @@ import (
 
 var interactiveOverride *bool
 
-// ForceSetIsInteractive allows overriding the interactive check, TODO: remember to use this from the CLI
+// ForceSetIsInteractive allows overriding the interactive check
 // Sith++
 func ForceSetIsInteractive(value bool) {
 	interactiveOverride = &value
