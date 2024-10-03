@@ -52,8 +52,9 @@ func (t *TUI) onPrintError(err error) {
 func (t *TUI) scanln(a ...any) {
 	_, err := fmt.Fscanln(t.input, a...)
 
-	// TODO: if unexpected newline
-	if err != nil {
+	if err != nil && err.Error() == "unexpected newline" {
+		// ignore
+	} else if err != nil {
 		slog.Error("failed to read user input", "error", err)
 		panic("failed to read user input: " + err.Error())
 	}
@@ -105,7 +106,7 @@ func (t *TUI) AskForeverWithPreamble(preamble, repeatingQuestion string, a ...an
 
 func (t *TUI) AskYesNo(question string, a ...any) bool {
 	for {
-		t.Printf(question+" [y/n]", a...)
+		t.Printf(question+" [y/n]: ", a...)
 
 		var response string
 		t.scanln(&response)
@@ -113,7 +114,7 @@ func (t *TUI) AskYesNo(question string, a ...any) bool {
 		switch strings.ToLower(response) {
 		case "y", "yes":
 			return true
-		case "n", "no", "":
+		case "n", "no":
 			return false
 		}
 	}

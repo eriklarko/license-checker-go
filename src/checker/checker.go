@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/eriklarko/license-checker/src/boolexpr"
+	"gopkg.in/yaml.v3"
 )
 
 type UnknownLicenseError struct {
@@ -23,6 +25,26 @@ func (ule *UnknownLicenseError) Error() string {
 // provide a callback using the `onUnknownLicense` constructor parameter
 type LicenseChecker struct {
 	context map[string]bool
+}
+
+func NewFromFile(path string) (*LicenseChecker, error) {
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, err
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	licenseMap := make(map[string]bool)
+	err = yaml.NewDecoder(file).Decode(&licenseMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode yaml: %w", err)
+	}
+
+	return NewFromMap(licenseMap), nil
+
 }
 
 func NewFromMap(context map[string]bool) *LicenseChecker {
@@ -91,4 +113,24 @@ func (lc *LicenseChecker) ValidateCurrentLicenses(currentLicenses map[string]str
 	}
 
 	return report, nil
+}
+
+func (lc *LicenseChecker) Write(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	yamlBytes, err := yaml.Marshal(lc.context)
+	if err != nil {
+		return fmt.Errorf("failed to marshal yaml: %w", err)
+	}
+
+	_, err = file.Write(yamlBytes)
+	if err != nil {
+		return fmt.Errorf("failed to write yaml to file: %w", err)
+	}
+
+	return nil
 }

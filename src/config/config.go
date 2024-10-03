@@ -1,11 +1,9 @@
 package config
 
 import (
-	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -87,6 +85,7 @@ func tryMakeAbsolute(relativePath string) string {
 	return absPath
 }
 
+// TODO: Test
 // Validate checks if the config is valid, i.e. all required fields are set.
 // Returns nil if the config is valid, otherwise an error message.
 func (c *Config) Validate() error {
@@ -131,66 +130,6 @@ func (c *Config) Write() error {
 	}
 
 	return nil
-}
-
-// WriteLicenseMap writes a map from license to a boolean indicating whether it
-// is allowed or not to a specified file.
-func (c *Config) WriteLicenseMap(licenseMap map[string]bool) error {
-	path := tryMakeAbsolute(c.LicensesFile)
-	file, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	for license, allowed := range licenseMap {
-		record := []string{license, strconv.FormatBool(allowed)}
-		if err := writer.Write(record); err != nil {
-			return fmt.Errorf("failed to write record %v: %w", record, err)
-		}
-	}
-
-	return nil
-}
-
-// ReadLicenseMap reads a map from license to a boolean indicating whether it is
-// allowed or not from a specified file.
-func (c *Config) ReadLicenseMap() (map[string]bool, error) {
-	path := tryMakeAbsolute(c.LicensesFile)
-	file, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return nil, err
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read records from file %s: %w", path, err)
-	}
-
-	licenseMap := make(map[string]bool)
-	for _, record := range records {
-		if len(record) != 2 {
-			return nil, fmt.Errorf("invalid record %v: expected 2 fields, got %d", record, len(record))
-		}
-
-		license := record[0]
-		allowed, err := strconv.ParseBool(record[1])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse boolean %s: %w", record[1], err)
-		}
-
-		licenseMap[license] = allowed
-	}
-
-	return licenseMap, nil
 }
 
 // String returns the YAML representation of the Config struct.

@@ -65,7 +65,7 @@ func CreateTempScript(t *testing.T, content string) string {
 	return tmpFile.Name()
 }
 
-func AssertYamlFileExists(t *testing.T, path string, content map[string]any) {
+func AssertYamlFileExists[T any](t *testing.T, path string, content map[string]T) {
 	t.Helper()
 
 	assert.FileExists(t, path)

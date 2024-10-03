@@ -111,7 +111,7 @@ func main() {
 	}
 
 	if environment.IsInteractive() {
-		runInteractive(tui, licenseChecker, currentLicenses)
+		runInteractive(tui, licenseChecker, currentLicenses, config)
 	} else {
 		runNonInteractive(licenseChecker, currentLicenses)
 	}
@@ -145,19 +145,14 @@ func overwriteConfigWithCmdLineFlags(conf *config.Config) {
 }
 
 func setUpLicenseChecker(conf *config.Config) (*checker.LicenseChecker, error) {
-	licenseMap, err := conf.ReadLicenseMap()
+	lc, err := checker.NewFromFile(conf.LicensesFile)
 	if os.IsNotExist(err) {
-		// it's okay for the license map file to not exist. this could be the first run
-		// if it isn't though, then it's an error. Maybe we can detect that somehow...
-		licenseMap = make(map[string]bool)
+		// return checker with no decisions made
+		return checker.NewFromMap(make(map[string]bool)), nil
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to read license map: %w", err)
-	} else {
-		// TODO: tui?????
-		fmt.Printf("Read existing decisions from %s\n", conf.LicensesFile)
+		return nil, fmt.Errorf("failed to load license checker from file %s: %w", conf.LicensesFile, err)
 	}
-
-	return checker.NewFromMap(licenseMap), nil
+	return lc, nil
 }
 
 // TODO: Move and test
@@ -213,6 +208,9 @@ func runNonInteractive(licenseChecker *checker.LicenseChecker, currentLicenses m
 		)
 		os.Exit(1)
 	}
+
+	slog.Info("All licenses are allowed")
+	os.Exit(0)
 }
 
 func printInteractiveInstructions(message string, args ...any) {
@@ -229,7 +227,12 @@ func getDisclaimer() string {
 	return "DISCLAIMER: THIS IS NOT LEGAL ADVICE. YOU ARE RESPONSIBLE FOR ENSURING THAT YOUR PROJECT COMPLIES WITH ALL APPLICABLE LAWS AND LICENSES."
 }
 
-func runInteractive(tui *tui.TUI, licenseChecker *checker.LicenseChecker, currentLicenses map[string]string) {
+func runInteractive(
+	tui *tui.TUI,
+	licenseChecker *checker.LicenseChecker,
+	currentLicenses map[string]string,
+	conf *config.Config,
+) {
 	phraser := phraser.New([]string{
 		"To start let's look at license %s",
 		"Next up license %s",
@@ -249,11 +252,33 @@ func runInteractive(tui *tui.TUI, licenseChecker *checker.LicenseChecker, curren
 		}
 
 		if report.HasDisallowedLicenses() {
-			// TODO: tell user they need to remove the disallowed dependencies or allow the license
+			for license, dependencies := range report.Disallowed {
+				tui.Printf("Disallowed license %s detected\n", license)
+				if len(dependencies) == 1 {
+					tui.Printf("It's currently only used by dependency %s\n", dependencies[0])
+				} else {
+					tui.PrintList("It's used by the following dependencies:", lo.ToAnySlice(dependencies), "#")
+				}
+
+				tui.Println("Please remove the disallowed dependencies or allow the license")
+				if tui.AskYesNo("Do you want to allow this license?") {
+					tui.Println("Okay, we'll remember that you want to allow this license")
+					licenseChecker.Update(license, true)
+					err := licenseChecker.Write(conf.LicensesFile)
+					if err != nil {
+						panic(err)
+					}
+				}
+				tui.Println()
+			}
+			break
+		} else {
+			tui.Println("Excellent news! No disallowed licenses detected")
 		}
 
 		if report.HasUnknownLicenses() {
 			tui.Printf("Okay, so we found %d unknown license(s). Let's go through them one by one\n", len(report.Unknown))
+			tui.Println()
 
 			for license, dependencies := range report.Unknown {
 				tui.Println(phraser.Get(license))
@@ -261,7 +286,7 @@ func runInteractive(tui *tui.TUI, licenseChecker *checker.LicenseChecker, curren
 				description, err := licenseDescriber.Describe(license)
 				if err != nil {
 					slog.Warn("Failed to describe license", "license", license, "error", err)
-				} else {
+				} else if description != "" {
 					tui.Printf("\n%s\n", description)
 				}
 
@@ -270,6 +295,20 @@ func runInteractive(tui *tui.TUI, licenseChecker *checker.LicenseChecker, curren
 				} else {
 					tui.PrintList("It's used by the following dependencies:", lo.ToAnySlice(dependencies), "#")
 				}
+
+				isAllowed := tui.AskYesNo("Do you want to allow this license?")
+				licenseChecker.Update(license, isAllowed)
+				if !isAllowed {
+					tui.Println("Okay, we'll remember that you don't want to allow this license")
+					tui.Println("Please remove any dependencies using it")
+				}
+				tui.Println()
+			}
+
+			// update licenses file with new decisions
+			err = licenseChecker.Write(conf.LicensesFile)
+			if err != nil {
+				panic(err)
 			}
 		} else {
 			break

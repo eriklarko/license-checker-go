@@ -1,14 +1,14 @@
-package checker_test
+package checker
 
 import (
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/checker"
+	helpers_test "github.com/eriklarko/license-checker/src/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
+func TestIsLicenseAllowed(t *testing.T) {
 	t.Run("only known licenses", func(t *testing.T) {
 		allowedLicenses := []string{"MIT", "Apache-2.0"}
 		disallowedLicenses := []string{"GPL-3.0"}
@@ -21,7 +21,7 @@ func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
 			"MIT || GPL-3.0":    true,
 		}
 
-		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
+		lc := NewFromLists(allowedLicenses, disallowedLicenses)
 		for name, expected := range tests {
 			t.Run(name, func(t *testing.T) {
 				result, err := lc.IsLicenseAllowed(name)
@@ -35,17 +35,17 @@ func TestLicenseChecker_IsLicenseAllowed(t *testing.T) {
 	t.Run("only unknown licenses", func(t *testing.T) {
 		allowedLicenses := []string{}
 		disallowedLicenses := []string{}
-		lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
+		lc := NewFromLists(allowedLicenses, disallowedLicenses)
 
-		var errUnknownLicense *checker.UnknownLicenseError
+		var errUnknownLicense *UnknownLicenseError
 		_, err := lc.IsLicenseAllowed("unknown")
 		assert.ErrorAs(t, err, &errUnknownLicense)
 	})
 }
 
-func TestLicenseChecker_Update(t *testing.T) {
+func TestUpdate(t *testing.T) {
 	license := "MIT"
-	lc := checker.NewFromMap(
+	lc := NewFromMap(
 		map[string]bool{
 			// disallowed to start with
 			license: false,
@@ -64,11 +64,11 @@ func TestLicenseChecker_Update(t *testing.T) {
 
 }
 
-func TestLicenseChecker_ValidateCurrentLicenses(t *testing.T) {
+func TestValidateCurrentLicenses(t *testing.T) {
 	allowedLicenses := []string{"MIT", "Apache-2.0"}
 	disallowedLicenses := []string{"GPL-3.0"}
 
-	lc := checker.NewFromLists(allowedLicenses, disallowedLicenses)
+	lc := NewFromLists(allowedLicenses, disallowedLicenses)
 
 	currentLicenses := map[string]string{
 		"some-dependency-1": "MIT",
@@ -93,6 +93,48 @@ func TestLicenseChecker_ValidateCurrentLicenses(t *testing.T) {
 	assertMapsEqual(t, expectedAllowed, report.Allowed)
 	assertMapsEqual(t, expectedDisallowed, report.Disallowed)
 	assertMapsEqual(t, expectedUnknown, report.Unknown)
+}
+
+func TestNewFromFile(t *testing.T) {
+	t.Run("valid content", func(t *testing.T) {
+		content := `MIT,true
+GPL-3.0,false
+`
+		licensesFile := helpers_test.CreateTempFileWithContents(t, content)
+
+		lc, err := NewFromFile(licensesFile)
+		require.NoError(t, err)
+
+		expected := map[string]bool{
+			"MIT":     true,
+			"GPL-3.0": false,
+		}
+		assert.Equal(t, expected, lc.context)
+	})
+
+	t.Run("invalid content", func(t *testing.T) {
+		content := `MIT,true
+GPL-3.0,notabool`
+		licensesFile := helpers_test.CreateTempFileWithContents(t, content)
+
+		_, err := NewFromFile(licensesFile)
+		assert.Error(t, err)
+	})
+}
+
+func TestWrite(t *testing.T) {
+	licenseDecisions := map[string]bool{
+		"MIT":        true,
+		"Apache-2.0": true,
+		"GPL-3.0":    false,
+	}
+	lc := NewFromMap(licenseDecisions)
+
+	file := helpers_test.CreateTempFile(t, "licenses.yaml").Name()
+	err := lc.Write(file)
+	require.NoError(t, err)
+
+	helpers_test.AssertYamlFileExists(t, file, licenseDecisions)
 }
 
 func assertMapsEqual(t *testing.T, expected, actual map[string][]string) {
