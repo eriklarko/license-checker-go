@@ -2,6 +2,7 @@ package curatedlicensescripts_test
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -108,6 +109,34 @@ func TestService_DownloadScript(t *testing.T) {
 	})
 }
 
+func TestSelectScript(t *testing.T) {
+	scriptContent := "echo 'script1'"
+	sut, _, conf := createServerEnvironmentWithScripts(t, script{
+		Thing: &filedownloader_test.Thing{
+			Name: "script1",
+			Path: "/script1.sh",
+		},
+		ScriptContent: scriptContent,
+	})
+	err := sut.DownloadCuratedScripts()
+	require.NoError(t, err)
+
+	t.Run("valid script", func(t *testing.T) {
+		err := sut.SelectScript("script1")
+		require.NoError(t, err)
+
+		// check that the list was downloaded
+		helpers_test.AssertFileExists(t, filepath.Join(conf.CacheDir, "script1.sh"), []byte(scriptContent))
+		// check that the list was selected
+		assert.Equal(t, "script1", conf.SelectedCuratedScript)
+	})
+
+	t.Run("script does not exist", func(t *testing.T) {
+		err := sut.SelectScript("non-existing-script")
+		require.Error(t, err)
+	})
+}
+
 type script struct {
 	*filedownloader_test.Thing `yaml:",inline"`
 
@@ -128,7 +157,7 @@ func createServerEnvironmentWithScripts(t *testing.T, scripts ...script) (*curat
 	conf := &config.Config{
 		CacheDir:             t.TempDir(),
 		CuratedScriptsSource: server.URL() + "/metadata.yaml",
-		//Path:                 helpers_test.CreateTempFile(t, "config").Name(),
+		Path:                 helpers_test.CreateTempFile(t, "config").Name(),
 	}
 
 	sut := curatedlicensescripts.New(conf)
