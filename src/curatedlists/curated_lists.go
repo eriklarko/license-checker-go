@@ -3,8 +3,11 @@ package curatedlists
 import (
 	"fmt"
 	"math"
+	"net/url"
+	"strings"
 
 	"github.com/eriklarko/license-checker/src/config"
+	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
 	"github.com/eriklarko/license-checker/src/filedownloader"
 )
 
@@ -44,9 +47,27 @@ func New(
 	config *config.Config,
 ) *Service {
 	return &Service{
-		config:         config,
-		fileDownloader: filedownloader.New[ListInfo]("curated-lists", config.CuratedListsSource, config.CacheDir),
+		config: config,
+		fileDownloader: filedownloader.New[ListInfo](
+			"curated-lists",
+			config.CuratedListsSource,
+			config.CacheDir,
+
+			func(li ListInfo) (string, error) {
+				url, err := url.Parse(li.Url)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse url %s: %w", li.Url, err)
+				}
+
+				pathSegments := strings.Split(url.Path, "/")
+				if len(pathSegments) == 0 {
+					return url.Path, nil
+				}
+				return pathSegments[len(pathSegments)-1], nil
+			},
+		),
 	}
+
 }
 
 func (s *Service) DownloadCuratedLists() error {
@@ -94,7 +115,25 @@ func (s *Service) GetHighlyRatedList() (string, string, error) {
 }
 
 func (s *Service) DownloadList(listName string) error {
-	return s.fileDownloader.Download(listName)
+	// No need to download the script if it already exists
+	path, err := s.fileDownloader.GetDestinationPath(listName)
+	if err != nil {
+		return fmt.Errorf("failed to get destination path: %w", err)
+	}
+
+	exists, err := packagemanagerdetector.FileExists(path)
+	if err != nil {
+		return fmt.Errorf("failed to check if script exists: %w", err)
+	}
+
+	if !exists {
+		err = s.fileDownloader.Download(listName)
+		if err != nil {
+			return fmt.Errorf("failed to download script: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) SelectList(listName string) error {

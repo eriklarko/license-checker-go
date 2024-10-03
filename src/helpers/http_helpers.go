@@ -2,6 +2,7 @@ package helpers_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -49,12 +50,16 @@ type MockServer struct {
 	server    *httptest.Server
 	responses map[string]http.Response
 	hitCount  map[string]int
+
+	bodyCache map[string][]byte
 }
 
 func NewMockServer() *MockServer {
 	mockServer := &MockServer{
 		responses: make(map[string]http.Response),
 		hitCount:  make(map[string]int),
+
+		bodyCache: make(map[string][]byte),
 	}
 	server := httptest.NewServer(mockServer)
 	mockServer.server = server
@@ -75,13 +80,34 @@ func (m *MockServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// here, we know that the URL is this server's URL :win:
 	url := m.URL() + r.URL.Path
 	m.hitCount[url]++
+	slog.Debug("MockServer hit", "path", url)
+
 	if response, ok := m.responses[url]; ok {
+		body, err := m.getAndCacheResponseBody(url, response.Body)
+		if err != nil {
+			panic(err)
+		}
+
 		w.WriteHeader(response.StatusCode)
-		io.Copy(w, response.Body)
+		w.Write(body)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 		slog.Warn("No response found for path", "path", url)
 	}
+}
+
+func (m *MockServer) getAndCacheResponseBody(path string, body io.ReadCloser) ([]byte, error) {
+	if cachedBody, ok := m.bodyCache[path]; ok {
+		return cachedBody, nil
+	}
+
+	bodyBytes, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	m.bodyCache[path] = bodyBytes
+
+	return bodyBytes, nil
 }
 
 func (m *MockServer) GetHitCount(path string) int {
@@ -95,6 +121,7 @@ func (m *MockServer) AddResponse(path string, response http.Response) {
 	if !strings.HasPrefix(path, "http") {
 		path = m.URL() + path
 	}
+	slog.Debug("Adding response", "path", path)
 	m.responses[path] = response
 }
 

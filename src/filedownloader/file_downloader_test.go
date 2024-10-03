@@ -2,7 +2,9 @@ package filedownloader_test
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,7 +54,7 @@ func TestDownloadMetadata(t *testing.T) {
 	httpMock.AddYamlResponse(endpoint, thingMetadata)
 
 	// download things
-	sut := filedownloader.New[*filedownloader_test.Thing]("things", endpoint, cacheDir)
+	sut := filedownloader.New[*filedownloader_test.Thing]("things", endpoint, cacheDir, thingToFileName)
 	err := sut.DownloadMetadata()
 	require.NoError(t, err)
 
@@ -69,7 +71,8 @@ func TestDownload(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		someContent := []byte("hello")
 
-		sut, _ := filedownloader_test.CreateFixtureWithThings[*filedownloader_test.Thing](t,
+		sut, _ := filedownloader_test.CreateFixtureWithThings(t,
+			thingToFileName,
 			&filedownloader_test.Thing{
 				Name:    "thing",
 				Path:    "/thing.yaml",
@@ -90,6 +93,7 @@ func TestDownload(t *testing.T) {
 
 	t.Run("invalid md5", func(t *testing.T) {
 		sut, httpMock := filedownloader_test.CreateFixtureWithThings(t,
+			thingToFileName,
 			&filedownloader_test.Thing{
 				Name:    "some-name",
 				Path:    "/thing.yaml",
@@ -114,6 +118,7 @@ func TestValidateDownloadedFiles(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	sut, _ := filedownloader_test.CreateFixtureWithThings(t,
+		thingToFileName,
 		&filedownloader_test.Thing{
 			Name:    "some-name",
 			Path:    "/thing.yaml",
@@ -149,6 +154,7 @@ func TestLockFileIsCached(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	sut, _ := filedownloader_test.CreateFixtureWithThings(t,
+		thingToFileName,
 		&filedownloader_test.Thing{
 			Name:    "thing1",
 			Path:    "thing1.yaml",
@@ -177,4 +183,13 @@ func TestLockFileIsCached(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, things1, things2)
+}
+
+func thingToFileName(t *filedownloader_test.Thing) (string, error) {
+	url, err := url.Parse(t.Url)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse url %s: %w", t.Url, err)
+	}
+
+	return url.Path, nil
 }

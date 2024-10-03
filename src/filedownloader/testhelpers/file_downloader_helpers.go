@@ -73,13 +73,22 @@ type Thinger interface {
 	SetContent(content io.ReadSeeker)
 }
 
-func CreateFixtureWithThings[T Thinger](t *testing.T, things ...T) (*filedownloader.Service[T], *helpers_test.MockServer) {
+func CreateFixtureWithThings[T Thinger](
+	t *testing.T,
+	metadataToFileName func(T) (string, error),
+	things ...T,
+) (*filedownloader.Service[T], *helpers_test.MockServer) {
 	server := NewServerWithThings(t, things...)
 	t.Cleanup(func() {
 		server.Close()
 	})
 
-	sut := filedownloader.New[T]("things", server.URL()+"/metadata.yaml", t.TempDir())
+	sut := filedownloader.New[T](
+		"things",
+		server.URL()+"/metadata.yaml",
+		t.TempDir(),
+		metadataToFileName,
+	)
 	err := sut.DownloadMetadata()
 	require.NoError(t, err)
 
@@ -93,7 +102,7 @@ func NewServerWithThings[T Thinger](t *testing.T, things ...T) *helpers_test.Moc
 	for _, thing := range things {
 		path := thing.GetPath()
 		if path == "" {
-			path = fmt.Sprintf("/%s.yaml", thing.GetName())
+			path = thing.GetName()
 		}
 
 		thing.SetUrl(fmt.Sprintf("%s%s", server.URL(), path))

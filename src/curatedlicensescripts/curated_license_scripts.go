@@ -2,6 +2,8 @@ package curatedlicensescripts
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/eriklarko/license-checker/src/config"
 	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
@@ -37,6 +39,18 @@ func New(
 			"curated-license-scripts",
 			config.CuratedScriptsSource,
 			config.CacheDir,
+			func(si ScriptInfo) (string, error) {
+				url, err := url.Parse(si.Url)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse url %s: %w", si.Url, err)
+				}
+
+				pathSegments := strings.Split(url.Path, "/")
+				if len(pathSegments) == 0 {
+					return url.Path, nil
+				}
+				return pathSegments[len(pathSegments)-1], nil
+			},
 		),
 	}
 }
@@ -78,18 +92,18 @@ func (s *Service) DownloadScript(packageManager string) (string, error) {
 	// No need to download the script if it already exists
 	path, err := s.fileDownloader.GetDestinationPath(packageManager)
 	if err != nil {
-		return "", fmt.Errorf("failed to get destination path for package manager '%s': %w", packageManager, err)
+		return "", fmt.Errorf("failed to get destination path: %w", err)
 	}
 
 	exists, err := packagemanagerdetector.FileExists(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to check if script for package manager '%s' exists: %w", packageManager, err)
+		return "", fmt.Errorf("failed to check if script exists: %w", err)
 	}
 
 	if !exists {
 		err = s.fileDownloader.Download(packageManager)
 		if err != nil {
-			return "", fmt.Errorf("failed to download script for package manager '%s': %w", packageManager, err)
+			return "", fmt.Errorf("failed to download script: %w", err)
 		}
 	}
 

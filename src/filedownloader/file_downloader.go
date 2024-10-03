@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +43,10 @@ type Service[T Metadata] struct {
 	// the directory where the downloaded files are stored
 	downloadDir string
 
+	// convert a metadata object to a file name. downloaded items will be saved
+	// to disk with this name
+	metadataToFileName func(T) (string, error)
+
 	// makes sure only one goroutine reads the lock file at a time
 	lockFileReadLock sync.RWMutex
 	// cache the contents of the list lock file
@@ -57,11 +60,16 @@ type Service[T Metadata] struct {
 //	```
 //	downloader := filedownloader.New("curated-lists", "http://example.com/metadata.yaml", "/tmp")
 //	```
-func New[T Metadata](contentType, metadataURL, downloadDir string) *Service[T] {
+func New[T Metadata](
+	contentType, metadataURL, downloadDir string,
+	metadataToFileName func(T) (string, error),
+) *Service[T] {
 	return &Service[T]{
 		contentType: contentType,
 		metadataURL: metadataURL,
 		downloadDir: downloadDir,
+
+		metadataToFileName: metadataToFileName,
 	}
 }
 
@@ -140,15 +148,15 @@ func (s *Service[T]) GetLockFilePath() string {
 func (s *Service[T]) GetDestinationPath(itemName string) (string, error) {
 	metadata, err := s.GetMetadata(itemName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get metadata for item '%s': %w", itemName, err)
+		return "", fmt.Errorf("failed to get metadata: %w", err)
 	}
 
-	url, err := url.Parse((*metadata).GetUrl())
+	filename, err := s.metadataToFileName(*metadata)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse url %s: %w", (*metadata).GetUrl(), err)
+		return "", fmt.Errorf("failed getting file name from metadata: %w", err)
 	}
 
-	return filepath.Join(s.downloadDir, url.Path), nil
+	return filepath.Join(s.downloadDir, filename), nil
 }
 
 func (s *Service[T]) GetMetadata(itemName string) (*T, error) {
@@ -205,7 +213,7 @@ func (s *Service[T]) Download(name string) error {
 		return fmt.Errorf("failed to get destination path for item '%s': %w", name, err)
 	}
 
-	slog.Info("Downloading list", "name", name, "url", metadata.GetUrl())
+	slog.Info("Downloading list", "name", name, "url", metadata.GetUrl(), "destination", destinationFile)
 
 	if metadata.GetUrl() == "" {
 		return fmt.Errorf("no url found for '%s'", name)

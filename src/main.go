@@ -65,11 +65,13 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{})))
 	}
 
+	// TODO: Verify curated script and list md5s
+
 	// detect if the tool needs to be set up
 	if _, err := os.Stat(config.LicensesFile); os.IsNotExist(err) {
 		curatedlistsService := curatedlists.New(config)
 		if config.SelectedCuratedList != "" {
-			slog.Warn("License file for list %s not found. Downloading it", "list", config.SelectedCuratedList)
+			slog.Warn("License file for selected curated list not found. Downloading it", "list", config.SelectedCuratedList)
 			err := curatedlistsService.DownloadList(config.SelectedCuratedList)
 			if err != nil {
 				panic(err)

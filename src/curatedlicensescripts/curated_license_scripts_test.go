@@ -3,7 +3,6 @@ package curatedlicensescripts_test
 import (
 	"bytes"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/eriklarko/license-checker/src/config"
@@ -14,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestService_HasScriptForPackageManager(t *testing.T) {
+func TestHasScriptForPackageManager(t *testing.T) {
 	availableScripts := []script{
 		{
 			Thing: &filedownloader_test.Thing{
@@ -66,11 +65,11 @@ func TestService_HasScriptForPackageManager(t *testing.T) {
 	})
 }
 
-func TestService_DownloadScript(t *testing.T) {
-	sut, httpServer, _ := createServerEnvironmentWithScripts(t, script{
+func TestDownloadScript(t *testing.T) {
+	sut, httpServer, conf := createServerEnvironmentWithScripts(t, script{
 		Thing: &filedownloader_test.Thing{
 			Name: "script1",
-			Path: "/script1",
+			Path: "/some/deep/path/script1.sh",
 		},
 		ScriptContent: "echo 'script1'",
 	})
@@ -82,10 +81,7 @@ func TestService_DownloadScript(t *testing.T) {
 		path, err := sut.DownloadScript("script1")
 		require.NoError(t, err)
 
-		if !strings.HasSuffix(path, "/script1") {
-			t.Fatalf("Expected path to end with '/script1', got '%s'", path)
-		}
-
+		assert.Equal(t, filepath.Join(conf.CacheDir, "script1.sh"), path)
 		// check that the script was downloaded correctly
 		helpers_test.AssertFileExists(t, path, []byte("echo 'script1'"))
 	})
@@ -105,7 +101,7 @@ func TestService_DownloadScript(t *testing.T) {
 		require.NoError(t, err)
 
 		// check that the endpoint was only hit once
-		assert.Equal(t, 1, httpServer.GetHitCount("/script1"))
+		assert.Equal(t, 1, httpServer.GetHitCount("/some/deep/path/script1.sh"))
 	})
 }
 

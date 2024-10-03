@@ -73,7 +73,6 @@ func (lc *LicenseChecker) IsLicenseAllowed(license string) (bool, error) {
 	return solution, nil
 }
 
-// TODO: test tesst test
 func (lc *LicenseChecker) ValidateCurrentLicenses(currentLicenses map[string]string) (*Report, error) {
 	report := &Report{}
 	for dependency, license := range currentLicenses {

@@ -16,6 +16,52 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestDownloadList(t *testing.T) {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+
+	list1Content := map[string]any{
+		"allowed-licenses":    []string{"MIT"},
+		"disallowed-licenses": []string{"GPL-3.0"},
+	}
+	sut, httpServer, conf := createServerEnvironmentWithLists(t,
+		list{
+			Thing: &filedownloader_test.Thing{
+				Name: "list1",
+				Path: "/some/deep/path/list1.yaml",
+			},
+			Description: "list1 description",
+			YamlContent: list1Content,
+		},
+	)
+
+	t.Run("download known list", func(t *testing.T) {
+		err := sut.DownloadList("list1")
+		require.NoError(t, err)
+
+		// check that the list was downloaded
+		helpers_test.AssertYamlFileExists(t, filepath.Join(conf.CacheDir, "list1.yaml"), list1Content)
+	})
+
+	t.Run("download unknown list", func(t *testing.T) {
+		err := sut.DownloadList("unknown-list")
+		require.Error(t, err)
+
+		assert.Contains(t, err.Error(), "no metadata")
+		assert.Contains(t, err.Error(), "unknown-list")
+	})
+
+	t.Run("Download known list twice", func(t *testing.T) {
+		err := sut.DownloadList("list1")
+		require.NoError(t, err)
+
+		err = sut.DownloadList("list1")
+		require.NoError(t, err)
+
+		// check that the endpoint was only hit once
+		assert.Equal(t, 1, httpServer.GetHitCount("/some/deep/path/list1.yaml"))
+	})
+}
+
 func TestGetAllLists(t *testing.T) {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 
