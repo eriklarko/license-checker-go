@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/config"
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts"
-	filedownloader_test "github.com/eriklarko/license-checker/src/filedownloader/testhelpers"
-	helpers_test "github.com/eriklarko/license-checker/src/helpers"
+	"github.com/eriklarko/license-checker-go/src/config"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts"
+	filedownloader_test "github.com/eriklarko/license-checker-go/src/filedownloader/testhelpers"
+	helpers_test "github.com/eriklarko/license-checker-go/src/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

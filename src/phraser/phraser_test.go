@@ -3,7 +3,7 @@ package phraser_test
 import (
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/phraser"
+	"github.com/eriklarko/license-checker-go/src/phraser"
 	"github.com/montanaflynn/stats"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"

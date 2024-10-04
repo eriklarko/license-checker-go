@@ -9,15 +9,15 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/eriklarko/license-checker/src/checker"
-	"github.com/eriklarko/license-checker/src/config"
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts"
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
-	"github.com/eriklarko/license-checker/src/curatedlists"
-	"github.com/eriklarko/license-checker/src/environment"
-	"github.com/eriklarko/license-checker/src/licensedescriber"
-	"github.com/eriklarko/license-checker/src/phraser"
-	"github.com/eriklarko/license-checker/src/tui"
+	"github.com/eriklarko/license-checker-go/src/checker"
+	"github.com/eriklarko/license-checker-go/src/config"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts/packagemanagerdetector"
+	"github.com/eriklarko/license-checker-go/src/curatedlists"
+	"github.com/eriklarko/license-checker-go/src/environment"
+	"github.com/eriklarko/license-checker-go/src/licensedescriber"
+	"github.com/eriklarko/license-checker-go/src/phraser"
+	"github.com/eriklarko/license-checker-go/src/tui"
 	"github.com/samber/lo"
 )
 
@@ -37,15 +37,15 @@ func main() {
 		environment.ForceSetIsInteractive(*interactive)
 	}
 
-	// Load the config
-	config, err := setUpConfig()
+	// Load the conf
+	conf, err := setUpConfig()
 	if err != nil {
 		panic(err)
 	}
 
 	tui := tui.New()
 
-	licenseChecker, err := setUpLicenseChecker(config)
+	licenseChecker, err := setUpLicenseChecker(conf)
 	if err != nil {
 		panic(err)
 	}
@@ -68,11 +68,11 @@ func main() {
 	// TODO: Verify curated script and list md5s
 
 	// detect if the tool needs to be set up
-	if _, err := os.Stat(config.LicensesFile); os.IsNotExist(err) {
-		curatedlistsService := curatedlists.New(config)
-		if config.SelectedCuratedList != "" {
-			slog.Warn("License file for selected curated list not found. Downloading it", "list", config.SelectedCuratedList)
-			err := curatedlistsService.DownloadList(config.SelectedCuratedList)
+	if _, err := os.Stat(conf.LicensesFile); os.IsNotExist(err) {
+		curatedlistsService := curatedlists.New(conf)
+		if conf.SelectedCuratedList != "" {
+			slog.Warn("License file for selected curated list not found. Downloading it", "list", conf.SelectedCuratedList)
+			err := curatedlistsService.DownloadList(conf.SelectedCuratedList)
 			if err != nil {
 				panic(err)
 			}
@@ -86,32 +86,32 @@ func main() {
 	}
 
 	// detect if the script for getting current licenses is missing
-	if _, err := os.Stat(config.LicensesScript); os.IsNotExist(err) {
+	if _, err := os.Stat(conf.LicensesScript); os.IsNotExist(err) {
 		if environment.IsInteractive() {
 			wd, err := os.Getwd()
 			if err != nil {
 				panic(err)
 			}
 			pmd := packagemanagerdetector.New(wd)
-			cls := curatedlicensescripts.New(config)
+			cls := curatedlicensescripts.New(conf)
 
-			askToChooseLicensesScript(pmd, cls, config, tui)
+			askToChooseLicensesScript(pmd, cls, conf, tui)
 			tui.Println()
 		} else {
 			printInteractiveInstructions(
 				"Couldn't find script used to get current licenses. Please run this tool interactively to set everything up.",
-				"script", config.LicensesScript,
+				"script", conf.LicensesScript,
 			)
 			os.Exit(1)
 		}
 	}
-	currentLicenses, err := getCurrentLicenses(config.LicensesScript)
+	currentLicenses, err := getCurrentLicenses(conf.LicensesScript)
 	if err != nil {
 		panic(err)
 	}
 
 	if environment.IsInteractive() {
-		runInteractive(tui, licenseChecker, currentLicenses, config)
+		runInteractive(tui, licenseChecker, currentLicenses, conf)
 	} else {
 		runNonInteractive(licenseChecker, currentLicenses)
 	}

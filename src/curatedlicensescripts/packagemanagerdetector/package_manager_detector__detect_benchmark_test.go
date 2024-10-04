@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts/packagemanagerdetector"
 )
 
 func BenchmarkDetect_NoManagers(b *testing.B) {

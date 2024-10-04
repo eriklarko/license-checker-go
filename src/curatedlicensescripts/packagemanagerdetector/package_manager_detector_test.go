@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts/packagemanagerdetector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/eriklarko/license-checker/src/config"
-	"github.com/eriklarko/license-checker/src/curatedlicensescripts/packagemanagerdetector"
-	"github.com/eriklarko/license-checker/src/filedownloader"
+	"github.com/eriklarko/license-checker-go/src/config"
+	"github.com/eriklarko/license-checker-go/src/curatedlicensescripts/packagemanagerdetector"
+	"github.com/eriklarko/license-checker-go/src/filedownloader"
 )
 
 // ListMetadata defines the shape we expect the response from the curated lists

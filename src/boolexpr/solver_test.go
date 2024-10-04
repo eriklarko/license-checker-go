@@ -3,7 +3,7 @@ package boolexpr_test
 import (
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/boolexpr"
+	"github.com/eriklarko/license-checker-go/src/boolexpr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

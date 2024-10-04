@@ -3,7 +3,7 @@ package checker
 import (
 	"testing"
 
-	helpers_test "github.com/eriklarko/license-checker/src/helpers"
+	helpers_test "github.com/eriklarko/license-checker-go/src/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

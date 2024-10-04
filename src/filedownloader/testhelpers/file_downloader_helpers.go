@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/filedownloader"
-	helpers_test "github.com/eriklarko/license-checker/src/helpers"
+	"github.com/eriklarko/license-checker-go/src/filedownloader"
+	helpers_test "github.com/eriklarko/license-checker-go/src/helpers"
 	"github.com/stretchr/testify/require"
 )
 

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/eriklarko/license-checker/src/boolexpr"
+	"github.com/eriklarko/license-checker-go/src/boolexpr"
 	"gopkg.in/yaml.v3"
 )
 

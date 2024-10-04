@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/eriklarko/license-checker/src/filedownloader"
-	filedownloader_test "github.com/eriklarko/license-checker/src/filedownloader/testhelpers"
+	"github.com/eriklarko/license-checker-go/src/filedownloader"
+	filedownloader_test "github.com/eriklarko/license-checker-go/src/filedownloader/testhelpers"
 
-	helpers_test "github.com/eriklarko/license-checker/src/helpers"
+	helpers_test "github.com/eriklarko/license-checker-go/src/helpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
