@@ -43,6 +43,11 @@ func main() {
 		panic(err)
 	}
 
+	// create cache dir if it doesn't exist
+	if err := os.MkdirAll(conf.CacheDir, 0755); err != nil {
+		panic(err)
+	}
+
 	tui := tui.New()
 
 	licenseChecker, err := setUpLicenseChecker(conf)
@@ -72,6 +77,13 @@ func main() {
 		curatedlistsService := curatedlists.New(conf)
 		if conf.SelectedCuratedList != "" {
 			slog.Warn("License file for selected curated list not found. Downloading it", "list", conf.SelectedCuratedList)
+			if !curatedlistsService.LockFileExists() {
+				tui.Println("The lock file containing the md5 checksum for your curated list is missing.")
+				tui.Println("Please either find the lock file or remove `selected-curated-list` ")
+				tui.Printf("from your config at %s\n", conf.Path)
+				os.Exit(1)
+			}
+
 			err := curatedlistsService.DownloadList(conf.SelectedCuratedList)
 			if err != nil {
 				panic(err)
@@ -242,7 +254,7 @@ func runInteractive(
 		"Let's consider %s",
 	})
 
-	licenseDescriber := licensedescriber.NewTLDRDescriber()
+	licenseDescriber := licensedescriber.NewTLDRLegalDescriber()
 
 	// validate licenses until there are no unknown licenses
 	for {
@@ -251,29 +263,9 @@ func runInteractive(
 			panic(err)
 		}
 
-		if report.HasDisallowedLicenses() {
-			for license, dependencies := range report.Disallowed {
-				tui.Printf("Disallowed license %s detected\n", license)
-				if len(dependencies) == 1 {
-					tui.Printf("It's currently only used by dependency %s\n", dependencies[0])
-				} else {
-					tui.PrintList("It's used by the following dependencies:", lo.ToAnySlice(dependencies), "#")
-				}
-
-				tui.Println("Please remove the disallowed dependencies or allow the license")
-				if tui.AskYesNo("Do you want to allow this license?") {
-					tui.Println("Okay, we'll remember that you want to allow this license")
-					licenseChecker.Update(license, true)
-					err := licenseChecker.Write(conf.LicensesFile)
-					if err != nil {
-						panic(err)
-					}
-				}
-				tui.Println()
-			}
+		if !report.HasUnknownLicenses() && !report.HasDisallowedLicenses() {
+			tui.Println("Excellent news! No unknown or disallowed licenses detected")
 			break
-		} else {
-			tui.Println("Excellent news! No disallowed licenses detected")
 		}
 
 		if report.HasUnknownLicenses() {
@@ -310,9 +302,31 @@ func runInteractive(
 			if err != nil {
 				panic(err)
 			}
-		} else {
+		}
+
+		if report.HasDisallowedLicenses() {
+			for license, dependencies := range report.Disallowed {
+				tui.Printf("Disallowed license %s detected\n", license)
+				if len(dependencies) == 1 {
+					tui.Printf("It's currently only used by dependency %s\n", dependencies[0])
+				} else {
+					tui.PrintList("It's used by the following dependencies:", lo.ToAnySlice(dependencies), "#")
+				}
+
+				tui.Println("Please remove the disallowed dependencies or allow the license")
+				if tui.AskYesNo("Do you want to allow this license?") {
+					tui.Println("Okay, we'll remember that you want to allow this license")
+					licenseChecker.Update(license, true)
+					err := licenseChecker.Write(conf.LicensesFile)
+					if err != nil {
+						panic(err)
+					}
+				}
+				tui.Println()
+			}
 			break
 		}
+
 	}
 }
 
