@@ -181,6 +181,10 @@ func (s *Service[T]) GetLockFileContents() (map[string]T, error) {
 		return s.lockFile, nil
 	}
 
+	if !s.LockFileExists() {
+		return nil, fmt.Errorf("lock file does not exist, please run DownloadMetadata() first")
+	}
+
 	path := s.GetLockFilePath()
 	file, err := os.Open(path)
 	if err != nil {
@@ -197,6 +201,11 @@ func (s *Service[T]) GetLockFileContents() (map[string]T, error) {
 	// cache contents for future use
 	s.lockFile = metadatas
 	return s.lockFile, nil
+}
+
+func (s *Service[T]) LockFileExists() bool {
+	_, err := os.Stat(s.GetLockFilePath())
+	return err == nil
 }
 
 // Download downloads a file from the internet and stores it in the download directory

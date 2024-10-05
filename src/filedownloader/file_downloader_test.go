@@ -185,6 +185,38 @@ func TestLockFileIsCached(t *testing.T) {
 	assert.Equal(t, things1, things2)
 }
 
+func TestLockFileExists(t *testing.T) {
+	server := filedownloader_test.NewServerWithThings(t,
+		&filedownloader_test.Thing{
+			Name:    "thing1",
+			Path:    "thing1.yaml",
+			Md5:     "73411061536ff8a32777eec043ece0e6",
+			Content: bytes.NewReader([]byte("hello")),
+		},
+	)
+	defer server.Close()
+
+	sut := filedownloader.New[*filedownloader_test.Thing](
+		"things",
+		server.URL()+"/metadata.yaml",
+		t.TempDir(),
+		thingToFileName,
+	)
+
+	// just after creating the service, the lock file should not exist
+	assert.False(t, sut.LockFileExists())
+
+	// after downloading metadata, the lock file should exist
+	err := sut.DownloadMetadata()
+	require.NoError(t, err)
+	assert.True(t, sut.LockFileExists())
+
+	// after removing the lock file, it should not exist
+	err = os.Remove(sut.GetLockFilePath())
+	require.NoError(t, err)
+	assert.False(t, sut.LockFileExists())
+}
+
 func thingToFileName(t *filedownloader_test.Thing) (string, error) {
 	url, err := url.Parse(t.Url)
 	if err != nil {

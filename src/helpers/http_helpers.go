@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -137,6 +139,15 @@ func (m *MockServer) AddReaderResponse(path string, body io.Reader) {
 	m.AddResponse(path, NewReaderResponse(body))
 }
 
+func (m *MockServer) AddFileResponse(requestPath, filePath string) error {
+	resp, err := NewFileResponse(filePath)
+	if err != nil {
+		return err
+	}
+	m.AddResponse(requestPath, resp)
+	return nil
+}
+
 func (m *MockServer) Reset() {
 	m.responses = make(map[string]http.Response)
 	m.hitCount = make(map[string]int)
@@ -166,4 +177,18 @@ func NewReaderResponse(body io.Reader) http.Response {
 		Header:     make(http.Header),
 		Body:       io.NopCloser(body),
 	}
+}
+
+func NewFileResponse(filePath string) (http.Response, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		absPath = filePath
+	}
+
+	fileContents, err := os.ReadFile(absPath)
+	if err != nil {
+		return http.Response{}, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	return NewReaderResponse(bytes.NewReader(fileContents)), nil
 }

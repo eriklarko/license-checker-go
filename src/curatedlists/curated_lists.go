@@ -70,6 +70,10 @@ func New(
 
 }
 
+func (s *Service) LockFileExists() bool {
+	return s.fileDownloader.LockFileExists()
+}
+
 func (s *Service) DownloadCuratedLists() error {
 	if s.config.CuratedListsSource == "" {
 		return fmt.Errorf("no curated list source set, see README for how to configure this")
