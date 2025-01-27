@@ -16,7 +16,7 @@ import (
 func TestGetLicenseSummary(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
-	// Create a mock server response with the HTML content
+	// Create a mock server responding with a copy of a real tldrlegal.com page
 	httpMock := helpers_test.NewMockServer()
 	defer httpMock.Close()
 
@@ -59,4 +59,28 @@ func TestGetLicenseSummary(t *testing.T) {
 		"State Changes",
 		"Include Notice",
 	}, summary.Must)
+}
+
+func TestGetLicenseSummary_MissingSummary(t *testing.T) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	// Create a mock server responding with HTML without the expected content
+	httpMock := helpers_test.NewMockServer()
+	defer httpMock.Close()
+
+	httpMock.AddStringResponse(
+		fmt.Sprintf("%s/license/apache-license-2-0-apache-2-0", httpMock.URL()),
+		"<html><body>All your base</body></html>",
+	)
+
+	sut := &TLDRLegalLicenseDescriber{
+		urlPattern: fmt.Sprintf("%s/license/%%s", httpMock.URL()),
+		collyObj: colly.NewCollector(
+			colly.AllowedDomains(strings.TrimPrefix(httpMock.URL(), "http://")),
+		),
+	}
+
+	summary, err := sut.GetLicenseSummary("apache-2.0")
+	require.NoError(t, err) // it's not an error if the summary is not found
+	assert.Empty(t, summary)
 }
